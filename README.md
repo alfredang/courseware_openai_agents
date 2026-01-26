@@ -180,12 +180,8 @@ Each agent is equipped with specialized function tools:
 
 - Python 3.11+
 - Streamlit account (for deployment)
-- **OpenRouter API Key** (recommended - single key for all providers)
-- Or individual API Keys:
-  - DeepSeek
-  - OpenAI
-  - Anthropic
-  - Google Gemini
+- **OpenRouter API Key** (recommended - single key for 38+ models)
+- Or **OpenAI API Key** (for native OpenAI models only)
 
 ### Key Dependencies
 - `openai-agents` - OpenAI Agents SDK for multi-agent orchestration
