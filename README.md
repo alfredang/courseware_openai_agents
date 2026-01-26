@@ -1,6 +1,6 @@
 # WSQ Courseware Generator with OpenAI Multi Agents
 
-A comprehensive AI-powered courseware generation platform built with AutoGen agents and Streamlit. This system automates the creation of educational documents including Course Proposals, Assessment Plans, Learning Guides, and more for workforce skills qualification (WSQ) training programs.
+A comprehensive AI-powered courseware generation platform built with OpenAI Multi Agents and Streamlit. This system automates the creation of educational documents including Course Proposals, Assessment Plans, Learning Guides, and more for workforce skills qualification (WSQ) training programs.
 
 ## 🚀 Quick Start for New Users
 
