@@ -23,5 +23,4 @@ oauth2client
 streamlit-modal
 xhtml2pdf
 
-# Playwright for web scraping (browsers installed at runtime)
-playwright
+# Note: Playwright removed - using requests for web scraping on Streamlit Cloud
