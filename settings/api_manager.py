@@ -2,7 +2,11 @@
 Dynamic API Key and Model Management
 
 This module handles dynamic storage and retrieval of API keys and custom LLM models.
-Keys are stored in session state and can be managed through the Settings UI.
+- API keys are loaded from .streamlit/secrets.toml (or environment variables)
+- Custom model configurations are stored in SQLite database
+
+Author: Wong Xin Ping
+Updated: 26 January 2026
 """
 
 import streamlit as st
@@ -11,11 +15,22 @@ import os
 from typing import Dict, Any, List
 from dotenv import load_dotenv
 
+# Import SQLite database operations
+from settings.api_database import (
+    get_all_custom_models as db_get_all_custom_models,
+    add_custom_model as db_add_custom_model,
+    delete_custom_model as db_delete_custom_model,
+    model_exists as db_model_exists,
+    migrate_from_json,
+    init_database
+)
+
 # Load environment variables from .env file
 load_dotenv()
 
-# File to store persistent API keys (outside of session state)
-API_KEYS_FILE = "settings/config/api_keys.json"
+# Legacy JSON file paths (for migration)
+LEGACY_CUSTOM_MODELS_FILE = "settings/config/custom_models.json"
+
 
 def _get_secret(key: str, default: str = "") -> str:
     """Safely get a secret from st.secrets or environment variables"""
@@ -29,9 +44,10 @@ def _get_secret(key: str, default: str = "") -> str:
     except Exception:
         return default
 
+
 def load_api_keys() -> Dict[str, str]:
-    """Load API keys from file or session state, with secrets.toml as fallback for missing keys"""
-    # Always start with secrets as the base (this ensures secrets are always checked)
+    """Load API keys from secrets.toml or environment variables"""
+    # Load from secrets.toml / environment variables only
     base_keys = {
         "OPENAI_API_KEY": _get_secret("OPENAI_API_KEY", ""),
         "DEEPSEEK_API_KEY": _get_secret("DEEPSEEK_API_KEY", ""),
@@ -41,43 +57,23 @@ def load_api_keys() -> Dict[str, str]:
         "GROK_API_KEY": _get_secret("GROK_API_KEY", "")
     }
 
-    # Then try to load from file and merge (file values take precedence if not empty)
-    if os.path.exists(API_KEYS_FILE):
-        try:
-            with open(API_KEYS_FILE, 'r') as f:
-                file_keys = json.load(f)
-                # Merge: use file value if it exists and is not empty, otherwise use base
-                for key, value in file_keys.items():
-                    if value:  # Only override if file has a non-empty value
-                        base_keys[key] = value
-        except Exception as e:
-            print(f"Error loading API keys from file: {e}")
-
-    # Check session state - use session values if they're not empty
-    if 'api_keys' in st.session_state:
-        session_keys = st.session_state['api_keys']
-        for key, value in session_keys.items():
-            if value:  # Only use session value if it's not empty
-                base_keys[key] = value
-
+    # Cache in session state for performance
     st.session_state['api_keys'] = base_keys
     return base_keys
 
+
 def save_api_keys(keys: Dict[str, str]) -> bool:
-    """Save API keys to session state and file"""
+    """
+    Save API keys to session state.
+    Note: Actual persistence should be done by editing .streamlit/secrets.toml
+    """
     try:
-        # Save to session state
         st.session_state['api_keys'] = keys
-
-        # Save to file for persistence
-        os.makedirs(os.path.dirname(API_KEYS_FILE), exist_ok=True)
-        with open(API_KEYS_FILE, 'w') as f:
-            json.dump(keys, f, indent=2)
-
         return True
     except Exception as e:
         st.error(f"Error saving API keys: {e}")
         return False
+
 
 def get_api_key(provider: str) -> str:
     """Get API key for specific provider"""
@@ -85,102 +81,107 @@ def get_api_key(provider: str) -> str:
     key_name = f"{provider.upper()}_API_KEY"
     return keys.get(key_name, "")
 
+
 def delete_api_key(key_name: str) -> bool:
-    """Delete an API key"""
+    """Clear an API key from session state"""
     try:
         keys = load_api_keys()
         if key_name in keys:
-            del keys[key_name]
+            keys[key_name] = ""
             return save_api_keys(keys)
-        else:
-            st.warning(f"API key '{key_name}' not found!")
-            return False
+        return False
     except Exception as e:
         st.error(f"Error deleting API key: {e}")
         return False
 
-def load_custom_models() -> List[Dict[str, Any]]:
-    """Load custom LLM models from session state or file"""
-    if 'custom_models' in st.session_state:
-        return st.session_state['custom_models']
 
-    # Try loading from file
-    models_file = "settings/config/custom_models.json"
-    if os.path.exists(models_file):
+def _migrate_json_to_sqlite():
+    """Migrate custom models from JSON to SQLite (one-time migration)"""
+    if os.path.exists(LEGACY_CUSTOM_MODELS_FILE):
         try:
-            with open(models_file, 'r') as f:
-                models = json.load(f)
-                st.session_state['custom_models'] = models
-                return models
-        except Exception as e:
-            print(f"Error loading custom models: {e}")
+            with open(LEGACY_CUSTOM_MODELS_FILE, 'r') as f:
+                json_models = json.load(f)
 
-    # Default empty list
-    st.session_state['custom_models'] = []
-    return []
+            if json_models:
+                migrated = migrate_from_json(json_models)
+                if migrated > 0:
+                    print(f"Migrated {migrated} custom models from JSON to SQLite")
+
+                # Rename old file to indicate migration complete
+                backup_file = LEGACY_CUSTOM_MODELS_FILE + ".migrated"
+                os.rename(LEGACY_CUSTOM_MODELS_FILE, backup_file)
+                print(f"Renamed {LEGACY_CUSTOM_MODELS_FILE} to {backup_file}")
+        except Exception as e:
+            print(f"Error during migration: {e}")
+
+
+def load_custom_models() -> List[Dict[str, Any]]:
+    """Load custom LLM models from SQLite database"""
+    # Check for and perform migration if needed
+    _migrate_json_to_sqlite()
+
+    # Load from SQLite
+    models = db_get_all_custom_models()
+
+    # Cache in session state
+    st.session_state['custom_models'] = models
+    return models
+
 
 def save_custom_models(models: List[Dict[str, Any]]) -> bool:
-    """Save custom models to session state and file"""
-    try:
-        st.session_state['custom_models'] = models
+    """
+    Save custom models - now handled by individual add/remove operations.
+    This function is kept for backward compatibility.
+    """
+    st.session_state['custom_models'] = models
+    return True
 
-        # Save to file
-        models_file = "settings/config/custom_models.json"
-        os.makedirs(os.path.dirname(models_file), exist_ok=True)
-        with open(models_file, 'w') as f:
-            json.dump(models, f, indent=2)
 
-        return True
-    except Exception as e:
-        st.error(f"Error saving custom models: {e}")
+def add_custom_model(
+    name: str,
+    provider: str,
+    model_id: str,
+    base_url: str = "",
+    temperature: float = 0.2,
+    api_provider: str = "",
+    custom_api_key: str = ""
+) -> bool:
+    """Add a new custom model to SQLite database"""
+    # Check if model already exists
+    if db_model_exists(name):
+        st.error(f"Model Display Name '{name}' already exists!")
+        st.error("Please use a different name to distinguish between models.")
         return False
 
-def add_custom_model(name: str, provider: str, model_id: str, base_url: str = "", temperature: float = 0.2, api_provider: str = "", custom_api_key: str = "") -> bool:
-    """Add a new custom model"""
-    models = load_custom_models()
+    # Add to database
+    success = db_add_custom_model(
+        name=name,
+        model_id=model_id,
+        provider=provider,
+        base_url=base_url if base_url else "https://openrouter.ai/api/v1",
+        temperature=temperature,
+        api_provider=api_provider if api_provider else "OPENROUTER"
+    )
 
-    # Check if exact same model display name already exists
-    for model in models:
-        if model['name'] == name:
-            st.error(f"Model Display Name '{name}' already exists!")
-            st.error("Please use a different name to distinguish between models.")
-            st.info("**Naming Examples:**")
-            st.info("'GPT-4o', 'GPT-4 Turbo', 'GPT-4o Mini'")
-            st.info("'Anthropic Sonnet', 'Anthropic Haiku'")
-            st.info("'Gemini Pro', 'Gemini Flash', 'Gemini 2.0'")
-            return False
+    if success:
+        # Clear session state cache to force reload
+        if 'custom_models' in st.session_state:
+            del st.session_state['custom_models']
 
-    # Determine API key to use
-    if api_provider == "CUSTOM" and custom_api_key:
-        api_key = custom_api_key
-    elif api_provider:
-        # Use the selected API provider
-        api_key = get_api_key(api_provider)
-    else:
-        # Fallback to automatic mapping
-        api_key = get_api_key(provider.replace("ChatCompletionClient", "").replace("OpenAI", "OPENAI"))
+    return success
 
-    new_model = {
-        "name": name,
-        "provider": provider,
-        "config": {
-            "model": model_id,
-            "api_key": api_key,
-            "temperature": temperature
-        }
-    }
-
-    if base_url:
-        new_model["config"]["base_url"] = base_url
-
-    models.append(new_model)
-    return save_custom_models(models)
 
 def remove_custom_model(name: str) -> bool:
-    """Remove a custom model"""
-    models = load_custom_models()
-    models = [m for m in models if m['name'] != name]
-    return save_custom_models(models)
+    """Remove a custom model from SQLite database"""
+    success = db_delete_custom_model(name)
+
+    if success:
+        # Clear session state cache to force reload
+        if 'custom_models' in st.session_state:
+            del st.session_state['custom_models']
+
+    return success
+
 
 def get_all_available_models() -> Dict[str, Dict[str, Any]]:
     """Get all available models (built-in + custom) with current API keys"""
@@ -218,17 +219,36 @@ def get_all_available_models() -> Dict[str, Dict[str, Any]]:
 
         updated_models[name] = updated_config
 
-    # Add custom models
+    # Add custom models from SQLite with API keys resolved at runtime
     custom_models = load_custom_models()
     for model in custom_models:
-        updated_models[model["name"]] = model
+        # Resolve API key based on api_provider
+        api_provider = model.get("api_provider", "OPENROUTER")
+        resolved_key = current_keys.get(f"{api_provider}_API_KEY", "")
+
+        # Create model config with resolved API key
+        model_with_key = {
+            "name": model["name"],
+            "provider": model["provider"],
+            "config": {
+                "model": model["config"]["model"],
+                "temperature": model["config"]["temperature"],
+                "base_url": model["config"].get("base_url", "https://openrouter.ai/api/v1"),
+                "api_key": resolved_key
+            }
+        }
+        updated_models[model["name"]] = model_with_key
 
     return updated_models
 
+
 def initialize_api_system():
     """Initialize the API system on app startup"""
+    # Initialize SQLite database
+    init_database()
+
     # Load API keys into session state
     load_api_keys()
 
-    # Load custom models into session state
+    # Load custom models into session state (triggers migration if needed)
     load_custom_models()

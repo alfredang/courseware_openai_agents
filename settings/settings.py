@@ -56,6 +56,12 @@ def manage_api_keys():
     """Manage API Keys section"""
     st.subheader("Existing API Keys")
 
+    # Info about where API keys are stored
+    st.info(
+        "API keys are loaded from `.streamlit/secrets.toml` or environment variables. "
+        "To add or modify keys, edit the secrets.toml file directly."
+    )
+
     # Load current API keys
     current_keys = load_api_keys()
 
@@ -67,42 +73,40 @@ def manage_api_keys():
         "OPENROUTER_API_KEY"
     ]
 
-    # Store edited values
-    edited_keys = {}
-
-    # Display each API key with input field and delete button
+    # Display each API key (read-only view showing if configured)
     for key_name in api_key_names:
-        col1, col2, col3 = st.columns([2, 4, 1])
+        col1, col2 = st.columns([2, 4])
 
         with col1:
             st.markdown(f"**{key_name}**")
 
         with col2:
-            edited_keys[key_name] = st.text_input(
-                key_name,
-                value=current_keys.get(key_name, ""),
-                type="password",
-                label_visibility="collapsed",
-                key=f"api_key_{key_name}"
-            )
-
-        with col3:
-            if st.button("", key=f"delete_{key_name}", icon=":material/delete:"):
-                current_keys[key_name] = ""
-                if save_api_keys(current_keys):
-                    st.rerun()
+            key_value = current_keys.get(key_name, "")
+            if key_value:
+                # Show masked key
+                masked = key_value[:8] + "..." + key_value[-4:] if len(key_value) > 12 else "****"
+                st.success(f"✅ Configured ({masked})")
+            else:
+                st.warning("⚠️ Not configured")
 
     st.markdown("")
 
-    # Save All Changes button
-    if st.button("Save All Changes", type="primary", icon=":material/save:"):
-        for key_name in api_key_names:
-            current_keys[key_name] = edited_keys.get(key_name, "")
-        if save_api_keys(current_keys):
-            st.success("API Keys saved successfully!")
-            st.rerun()
-        else:
-            st.error("Error saving API Keys. Please try again.")
+    # Show help for configuring secrets
+    with st.expander("📝 How to configure API keys"):
+        st.markdown("""
+        **Edit `.streamlit/secrets.toml`:**
+        ```toml
+        OPENAI_API_KEY = "sk-your-key-here"
+        OPENROUTER_API_KEY = "sk-or-your-key-here"
+        DEEPSEEK_API_KEY = "sk-your-key-here"
+        GEMINI_API_KEY = "your-key-here"
+        ```
+
+        **For Streamlit Cloud deployment:**
+        Add secrets in the Streamlit Cloud dashboard under Settings → Secrets.
+
+        **Recommended:** Use OpenRouter API key for access to multiple models through a single key.
+        """)
 
 
 def quick_add_openrouter_model(name: str, model_id: str, temperature: float = 0.2):
