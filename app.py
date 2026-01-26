@@ -37,11 +37,18 @@ def lazy_import_settings():
 
 def display_homepage():
     """Display homepage with navigation boxes and chatbot"""
-    st.title("Courseware AutoGen")
-    st.markdown("Welcome to the Courseware Generation System. Select a module below or use the chatbot for assistance.")
+    st.markdown("""
+        <style>
+               .block-container {
+                    padding-top: 1rem;
+                }
+        </style>
+        """, unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center;'>WSQ Courseware Generator with OpenAI Multi Agents</h1>", unsafe_allow_html=True)
+
 
     st.markdown("---")
-    st.subheader("Quick Access")
+
 
     # Navigation boxes - 3 columns, 2 rows
     col1, col2, col3 = st.columns(3)
@@ -107,21 +114,14 @@ def display_homepage():
                 st.session_state['nav_to'] = "Check Documents"
                 st.rerun()
 
-    # Chatbot section
-    st.markdown("---")
-    st.subheader("Courseware Assistant")
-    st.caption("Ask questions about courseware generation or get help with the system. This agent can search the web for information.")
-
     # Initialize chat history
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = []
 
     # Display chat messages
-    chat_container = st.container(height=300)
-    with chat_container:
-        for message in st.session_state.chat_messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+    for message in st.session_state.chat_messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
     # Chat input
     if prompt := st.chat_input("Ask about courseware generation..."):
@@ -143,7 +143,7 @@ def display_homepage():
                 # Create the courseware assistant agent with tools
                 courseware_agent = Agent(
                     name="Courseware Assistant",
-                    instructions="""You are a helpful assistant for the Courseware AutoGen system.
+                    instructions="""You are a helpful assistant for the WSQ Courseware Generator with OpenAI Multi Agents.
                     This system helps create educational courseware documents including:
                     - Course Proposals (CP)
                     - Assessment Plans (AP), Facilitator Guides (FG), Learner Guides (LG), and Lesson Plans (LP)
