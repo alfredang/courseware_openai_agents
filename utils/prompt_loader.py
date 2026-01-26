@@ -2,7 +2,7 @@
 Prompt Loading Utility
 
 This module provides centralized prompt management for the courseware generation system.
-All prompts are stored as text files in the prompts/ folder and can be loaded with variable substitution.
+All prompts are stored as markdown files in the prompts/ folder and can be loaded with variable substitution.
 
 Usage:
     from utils.prompt_loader import load_prompt
@@ -54,7 +54,7 @@ def load_prompt(prompt_path: str, **kwargs) -> str:
     project_root = os.path.dirname(current_dir)
     
     # Construct full path to prompt file
-    prompt_file_path = os.path.join(project_root, "prompts", f"{prompt_path}.txt")
+    prompt_file_path = os.path.join(project_root, "prompts", f"{prompt_path}.md")
     
     # Check if file exists
     if not os.path.exists(prompt_file_path):
@@ -143,8 +143,8 @@ def list_available_prompts() -> Dict[str, list]:
         if rel_path == '.':
             continue
             
-        # Filter only .txt files and remove extension
-        txt_files = [os.path.splitext(f)[0] for f in files if f.endswith('.txt')]
+        # Filter only .md files and remove extension
+        txt_files = [os.path.splitext(f)[0] for f in files if f.endswith('.md')]
         
         if txt_files:
             available_prompts[rel_path] = txt_files
@@ -221,10 +221,10 @@ def get_prompt_preview(prompt_path: str, max_chars: int = 200) -> str:
     """Get a preview of a prompt file without full loading."""
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(current_dir)
-    prompt_file_path = os.path.join(project_root, "prompts", f"{prompt_path}.txt")
+    prompt_file_path = os.path.join(project_root, "prompts", f"{prompt_path}.md")
     
     if not os.path.exists(prompt_file_path):
-        return f"❌ File not found: {prompt_path}.txt"
+        return f"❌ File not found: {prompt_path}.md"
     
     try:
         with open(prompt_file_path, 'r', encoding='utf-8') as f:
@@ -259,7 +259,7 @@ def get_prompt_stats() -> Dict[str, Any]:
         if category == '.':
             continue
             
-        txt_files = [f for f in files if f.endswith('.txt')]
+        txt_files = [f for f in files if f.endswith('.md')]
         if not txt_files:
             continue
             
