@@ -1,4 +1,4 @@
-# Courseware AutoGen System
+# WSQ Courseware Generator with OpenAI Multi Agents
 
 A comprehensive AI-powered courseware generation platform built with AutoGen agents and Streamlit. This system automates the creation of educational documents including Course Proposals, Assessment Plans, Learning Guides, and more for workforce skills qualification (WSQ) training programs.
 
@@ -15,7 +15,7 @@ A comprehensive AI-powered courseware generation platform built with AutoGen age
 **Option A: If you received a folder/ZIP file:**
 ```bash
 # 1. Navigate to the downloaded project folder
-cd "/path/to/courseware_autogen 4"
+cd "/path/to/courseware_openai_agents"
 
 # 2. Create virtual environment (IMPORTANT - isolates dependencies)
 python3 -m venv .venv
@@ -32,8 +32,8 @@ pip install -r requirements.txt
 **Option B: If downloading from Git repository:**
 ```bash
 # 1. Clone the repository
-git clone https://github.com/alfredang/courseware_autogen.git
-cd courseware_autogen
+git clone https://github.com/alfredang/courseware_openai_agents.git
+cd courseware_openai_agents
 
 # 2. Create virtual environment
 python3 -m venv .venv
