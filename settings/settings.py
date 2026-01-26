@@ -73,19 +73,17 @@ def manage_api_keys():
 
     # Info about where API keys are stored
     st.info(
-        "API keys are loaded from `.streamlit/secrets.toml` or environment variables. "
-        "To add or modify keys, edit the secrets.toml file directly."
+        "**OpenRouter API key is recommended** - provides access to 38+ models from OpenAI, Anthropic, Google, DeepSeek, and more through a single key. "
+        "API keys are loaded from `.streamlit/secrets.toml` or environment variables."
     )
 
     # Load current API keys
     current_keys = load_api_keys()
 
-    # Define the API keys to display
+    # Define the API keys to display (OpenAI and OpenRouter only)
     api_key_names = [
+        "OPENROUTER_API_KEY",
         "OPENAI_API_KEY",
-        "DEEPSEEK_API_KEY",
-        "GEMINI_API_KEY",
-        "OPENROUTER_API_KEY"
     ]
 
     # Display each API key (read-only view showing if configured)
@@ -111,16 +109,14 @@ def manage_api_keys():
         st.markdown("""
         **Edit `.streamlit/secrets.toml`:**
         ```toml
-        OPENAI_API_KEY = "sk-your-key-here"
         OPENROUTER_API_KEY = "sk-or-your-key-here"
-        DEEPSEEK_API_KEY = "sk-your-key-here"
-        GEMINI_API_KEY = "your-key-here"
+        OPENAI_API_KEY = "sk-your-key-here"
         ```
 
         **For Streamlit Cloud deployment:**
         Add secrets in the Streamlit Cloud dashboard under Settings > Secrets.
 
-        **Recommended:** Use OpenRouter API key for access to multiple models through a single key.
+        **Recommended:** Use **OpenRouter API key** for access to 38+ models (OpenAI, Anthropic, Google, DeepSeek, Meta, Qwen, Mistral) through a single key. Get your key at [openrouter.ai](https://openrouter.ai).
         """)
 
 
