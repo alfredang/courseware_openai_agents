@@ -69,7 +69,7 @@ except ImportError:
 from copy import deepcopy
 from docx import Document
 from docxtpl import DocxTemplate
-from common.company_manager import get_selected_company, get_company_template, apply_company_branding, show_company_info
+from company.company_manager import get_selected_company, get_company_template, apply_company_branding, show_company_info
 import generate_assessment.utils.utils as utils
 from openai import OpenAI
 from generate_assessment.utils.openai_agentic_CS import generate_cs
@@ -78,7 +78,7 @@ from generate_assessment.utils.openai_agentic_SAQ import generate_saq
 from generate_assessment.utils.pydantic_models import FacilitatorGuideExtraction
 from settings.model_configs import get_model_config
 from settings.api_manager import load_api_keys
-from common.common import parse_json_content
+from utils.helpers import parse_json_content
 
 ################################################################################
 # Initialize session_state keys at the top of the script.

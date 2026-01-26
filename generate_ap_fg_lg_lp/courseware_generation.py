@@ -115,7 +115,7 @@ from bs4 import BeautifulSoup
 from pydantic import BaseModel
 from typing import List, Optional
 from openai import OpenAI
-from common.common import save_uploaded_file, parse_json_content
+from utils.helpers import save_uploaded_file, parse_json_content
 # Import organisation CRUD utilities and model
 from generate_ap_fg_lg_lp.utils.organization_utils import (
     load_organizations,

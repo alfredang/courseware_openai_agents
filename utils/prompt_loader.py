@@ -5,7 +5,7 @@ This module provides centralized prompt management for the courseware generation
 All prompts are stored as text files in the prompts/ folder and can be loaded with variable substitution.
 
 Usage:
-    from common.prompt_loader import load_prompt
+    from utils.prompt_loader import load_prompt
     
     # Load a basic prompt
     prompt = load_prompt("assessment/saq_generation")

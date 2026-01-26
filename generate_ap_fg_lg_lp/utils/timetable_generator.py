@@ -44,7 +44,7 @@ Date:
 """
 
 from openai import OpenAI
-from common.common import parse_json_content
+from utils.helpers import parse_json_content
 from settings.model_configs import get_model_config
 import asyncio
 import time

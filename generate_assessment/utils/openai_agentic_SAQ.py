@@ -11,7 +11,7 @@ Date: 2026-01-20
 import asyncio
 import json
 from generate_assessment.utils.pydantic_models import FacilitatorGuideExtraction
-from common.common import parse_json_content
+from utils.helpers import parse_json_content
 from generate_cp.utils.openai_model_client import create_openai_client
 
 

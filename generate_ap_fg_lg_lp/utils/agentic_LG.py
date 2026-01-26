@@ -27,7 +27,7 @@ Dependencies:
          • openai (OpenAI SDK)
          • docxtpl (DocxTemplate)
     - Custom Utilities:
-         • parse_json_content from common.common
+         • parse_json_content from utils.helpers
          • process_logo_image from generate_ap_fg_lg_lp/utils/helper
 
 Usage:
@@ -48,7 +48,7 @@ import tempfile
 import asyncio
 from openai import OpenAI
 from docxtpl import DocxTemplate
-from common.common import parse_json_content
+from utils.helpers import parse_json_content
 from generate_ap_fg_lg_lp.utils.helper import process_logo_image
 
 LG_TEMPLATE_DIR = "generate_ap_fg_lg_lp/input/Template/LG_TGS-Ref-No_Course-Title_v1.docx"

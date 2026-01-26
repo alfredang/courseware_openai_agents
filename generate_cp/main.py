@@ -25,7 +25,7 @@ import json
 from generate_cp.cv_main import create_course_validation
 import streamlit as st
 from generate_cp.excel_main import process_excel
-from common.company_manager import get_selected_company, get_company_template
+from company.company_manager import get_selected_company, get_company_template
 
 
 async def main(input_tsc) -> None:

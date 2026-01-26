@@ -15,14 +15,32 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
+
+def get_database_url() -> str:
+    """Get DATABASE_URL from environment or Streamlit secrets"""
+    # First try environment variable
+    url = os.environ.get("DATABASE_URL", "")
+    if url:
+        return url
+
+    # Try Streamlit secrets
+    try:
+        import streamlit as st
+        url = st.secrets.get("DATABASE_URL", "")
+        if url:
+            return url
+    except:
+        pass
+
+    return ""
 
 
 def get_connection():
     """Get database connection"""
-    if not DATABASE_URL:
-        raise Exception("DATABASE_URL not configured in environment variables")
-    return psycopg2.connect(DATABASE_URL)
+    database_url = get_database_url()
+    if not database_url:
+        raise Exception("DATABASE_URL not configured in environment variables or Streamlit secrets")
+    return psycopg2.connect(database_url)
 
 
 def init_database():

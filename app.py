@@ -15,7 +15,7 @@ def lazy_import_courseware():
     return courseware_generation
 
 def lazy_import_brochure_v2():
-    import generate_brochure_v2.brochure_generation as brochure_generation
+    import generate_brochure.brochure_generation as brochure_generation
     return brochure_generation
 
 def lazy_import_annex_v2():
@@ -357,20 +357,27 @@ with st.sidebar:
 # Check if a settings page is selected (takes priority)
 settings_page = st.session_state.get('settings_page', None)
 
+# Track if user clicked on main menu (not just a rerun)
+previous_menu = st.session_state.get('previous_menu_selection', None)
+menu_changed = previous_menu is not None and previous_menu != selected
+st.session_state['previous_menu_selection'] = selected
+
 # Display the selected app - using lazy loading for performance
 if settings_page == "API & LLM Models":
     settings = lazy_import_settings()
     settings.llm_settings_app()
-    # Clear settings page when main menu is clicked
-    if selected:
+    # Only clear settings page when main menu is explicitly clicked
+    if menu_changed:
         st.session_state['settings_page'] = None
+        st.rerun()
 
 elif settings_page == "Company Management":
     settings = lazy_import_settings()
     settings.company_management_app()
-    # Clear settings page when main menu is clicked
-    if selected:
+    # Only clear settings page when main menu is explicitly clicked
+    if menu_changed:
         st.session_state['settings_page'] = None
+        st.rerun()
 
 elif selected == "Home":
     st.session_state['settings_page'] = None

@@ -463,6 +463,7 @@ def display_company_list(organizations: List[Dict]):
                 original_idx = organizations.index(company)
                 if st.button("✏️", key=f"edit_btn_{idx}", help="Edit company"):
                     st.session_state['edit_company_idx'] = original_idx
+                    st.session_state['company_view'] = 'edit'
                     st.rerun()
 
             st.divider()
@@ -474,16 +475,39 @@ def manage_company_settings():
     # Load current organizations
     try:
         organizations = get_organizations()
-    except:
+    except Exception as e:
+        st.error(f"Error loading organizations from database: {e}")
         organizations = []
 
-    # Create tabs for List, Edit and Add Company
-    list_tab, edit_tab, add_tab = st.tabs(["📋 Company List", "✏️ Edit Company", "➕ Add New Company"])
+    # Initialize view state
+    if 'company_view' not in st.session_state:
+        st.session_state['company_view'] = 'list'
 
-    with list_tab:
+    # View selector using columns with buttons
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("📋 Company List", use_container_width=True,
+                     type="primary" if st.session_state['company_view'] == 'list' else "secondary"):
+            st.session_state['company_view'] = 'list'
+            st.rerun()
+    with col2:
+        if st.button("✏️ Edit Company", use_container_width=True,
+                     type="primary" if st.session_state['company_view'] == 'edit' else "secondary"):
+            st.session_state['company_view'] = 'edit'
+            st.rerun()
+    with col3:
+        if st.button("➕ Add New Company", use_container_width=True,
+                     type="primary" if st.session_state['company_view'] == 'add' else "secondary"):
+            st.session_state['company_view'] = 'add'
+            st.rerun()
+
+    st.markdown("---")
+
+    # Display based on current view
+    if st.session_state['company_view'] == 'list':
         display_company_list(organizations)
 
-    with edit_tab:
+    elif st.session_state['company_view'] == 'edit':
         st.subheader("Select Company to Edit")
 
         if organizations:
@@ -504,9 +528,9 @@ def manage_company_settings():
             if selected_company_idx is not None and selected_company_idx < len(organizations):
                 edit_company_form(organizations, selected_company_idx)
         else:
-            st.info("No companies found. Add a new company in the 'Add New Company' tab.")
+            st.info("No companies found. Add a new company first.")
 
-    with add_tab:
+    elif st.session_state['company_view'] == 'add':
         st.subheader("Add New Company")
         add_company_form(organizations)
 

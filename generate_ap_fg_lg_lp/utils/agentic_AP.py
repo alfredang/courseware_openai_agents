@@ -66,7 +66,7 @@ from typing import List, Union, Optional
 from openai import OpenAI
 from docxtpl import DocxTemplate
 from generate_ap_fg_lg_lp.utils.helper import retrieve_excel_data, process_logo_image
-from common.common import parse_json_content
+from utils.helpers import parse_json_content
 
 class AssessmentMethod(BaseModel):
     evidence: Union[str, List[str]]

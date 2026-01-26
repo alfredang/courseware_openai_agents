@@ -5,7 +5,7 @@ import tempfile
 from generate_cp.main import main
 import asyncio
 from generate_cp.utils.document_parser import parse_document
-from common.company_manager import get_selected_company, show_company_info, get_company_template, apply_company_branding
+from company.company_manager import get_selected_company, show_company_info, get_company_template, apply_company_branding
 
 # Initialize session state variables
 if 'processing_done' not in st.session_state:
