@@ -25,7 +25,16 @@ from settings.api_database import (
     model_exists as db_model_exists,
     migrate_from_json,
     migrate_from_old_schema,
-    init_database
+    init_database,
+    refresh_builtin_models as db_refresh_builtin_models,
+    refresh_builtin_api_keys as db_refresh_builtin_api_keys,
+    # API key config functions
+    get_all_api_key_configs as db_get_all_api_key_configs,
+    get_api_key_config as db_get_api_key_config,
+    add_api_key_config as db_add_api_key_config,
+    delete_api_key_config as db_delete_api_key_config,
+    update_api_key_configured_status as db_update_api_key_configured_status,
+    api_key_config_exists as db_api_key_config_exists
 )
 
 # Load environment variables from .env file
@@ -49,17 +58,26 @@ def _get_secret(key: str, default: str = "") -> str:
 
 
 def load_api_keys() -> Dict[str, str]:
-    """Load API keys from secrets.toml or environment variables"""
-    # Load from secrets.toml / environment variables only
-    # Only OpenRouter and OpenAI API keys are supported
-    base_keys = {
-        "OPENROUTER_API_KEY": _get_secret("OPENROUTER_API_KEY", ""),
-        "OPENAI_API_KEY": _get_secret("OPENAI_API_KEY", ""),
-    }
+    """Load all API keys from secrets.toml or environment variables based on database config"""
+    # Initialize database to ensure api_keys table exists
+    init_database()
+
+    # Get all configured API key names from database
+    api_key_configs = db_get_all_api_key_configs()
+
+    # Load each configured API key from secrets/env
+    api_keys = {}
+    for config in api_key_configs:
+        key_name = config["key_name"]
+        key_value = _get_secret(key_name, "")
+        api_keys[key_name] = key_value
+
+        # Update configured status in database
+        db_update_api_key_configured_status(key_name, bool(key_value))
 
     # Cache in session state for performance
-    st.session_state['api_keys'] = base_keys
-    return base_keys
+    st.session_state['api_keys'] = api_keys
+    return api_keys
 
 
 def save_api_keys(keys: Dict[str, str]) -> bool:
@@ -216,6 +234,7 @@ def get_all_available_models() -> Dict[str, Dict[str, Any]]:
                 "base_url": model["config"].get("base_url", "https://openrouter.ai/api/v1"),
                 "api_key": resolved_key
             },
+            "api_provider": api_provider,
             "is_builtin": model.get("is_builtin", False)
         }
         updated_models[model["name"]] = model_with_key
@@ -225,7 +244,7 @@ def get_all_available_models() -> Dict[str, Dict[str, Any]]:
 
 def initialize_api_system():
     """Initialize the API system on app startup"""
-    # Initialize SQLite database (includes seeding built-in models)
+    # Initialize SQLite database (includes seeding built-in models and API key configs)
     init_database()
 
     # Migrate from old schema if needed
@@ -234,5 +253,71 @@ def initialize_api_system():
     # Check for JSON migration
     _migrate_json_to_sqlite()
 
+    # Refresh built-in models and API keys (updates display names and adds new models)
+    db_refresh_builtin_models()
+    db_refresh_builtin_api_keys()
+
     # Load API keys into session state
     load_api_keys()
+
+
+# ============ API Key Configuration Management ============
+
+def get_all_api_key_configs() -> List[Dict[str, Any]]:
+    """Get all API key configurations from database"""
+    return db_get_all_api_key_configs()
+
+
+def add_api_key_config(
+    key_name: str,
+    display_name: str,
+    base_url: str = "",
+    description: str = ""
+) -> bool:
+    """Add a new API key configuration"""
+    # Ensure key_name is in correct format
+    if not key_name.endswith("_API_KEY"):
+        key_name = f"{key_name.upper()}_API_KEY"
+
+    if db_api_key_config_exists(key_name):
+        st.error(f"API key '{key_name}' already exists!")
+        return False
+
+    success = db_add_api_key_config(
+        key_name=key_name,
+        display_name=display_name,
+        base_url=base_url,
+        description=description
+    )
+
+    if success:
+        # Clear session state to force reload
+        if 'api_keys' in st.session_state:
+            del st.session_state['api_keys']
+
+    return success
+
+
+def remove_api_key_config(key_name: str) -> bool:
+    """Remove an API key configuration (only custom ones)"""
+    success = db_delete_api_key_config(key_name)
+
+    if success:
+        # Clear session state to force reload
+        if 'api_keys' in st.session_state:
+            del st.session_state['api_keys']
+
+    return success
+
+
+def get_api_providers_for_dropdown() -> List[Dict[str, str]]:
+    """Get list of API providers for dropdown selection in custom model form"""
+    configs = db_get_all_api_key_configs()
+    return [
+        {
+            "key_name": c["key_name"],
+            "display_name": c["display_name"],
+            "base_url": c["base_url"] or ""
+        }
+        for c in configs
+    ]

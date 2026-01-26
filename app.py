@@ -43,16 +43,24 @@ def display_homepage():
     """Display homepage with navigation boxes and chatbot"""
     st.markdown("""
         <style>
-               .block-container {
-                    padding-top: 1rem;
-                }
+            .block-container {
+                padding-top: 1rem;
+            }
+            .card-header {
+                text-align: center;
+                font-size: 1.1rem;
+                font-weight: 600;
+                margin-bottom: 0.25rem;
+            }
+            .card-desc {
+                text-align: center;
+                font-size: 0.8rem;
+                color: #888;
+                margin-bottom: 0.5rem;
+            }
         </style>
         """, unsafe_allow_html=True)
-    st.markdown("<h1 style='text-align: center;'>WSQ Courseware Generator with OpenAI Multi Agents</h1>", unsafe_allow_html=True)
-
-
-    st.markdown("---")
-
+    st.markdown("<h2 style='text-align: center; font-size: 1.75rem;'>WSQ Courseware Assistant with OpenAI Multi Agents</h2>", unsafe_allow_html=True)
 
     # Navigation boxes - 3 columns, 2 rows
     col1, col2, col3 = st.columns(3)
@@ -69,24 +77,24 @@ def display_homepage():
     # First row
     with col1:
         with st.container(border=True):
-            st.markdown(f"### {modules[0]['icon']} {modules[0]['name']}")
-            st.caption(modules[0]['desc'])
+            st.markdown(f"<div class='card-header'>{modules[0]['icon']} {modules[0]['name']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='card-desc'>{modules[0]['desc']}</div>", unsafe_allow_html=True)
             if st.button("Open", key=modules[0]['key'], use_container_width=True):
                 st.session_state['nav_to'] = "Generate CP"
                 st.rerun()
 
     with col2:
         with st.container(border=True):
-            st.markdown(f"### {modules[1]['icon']} {modules[1]['name']}")
-            st.caption(modules[1]['desc'])
+            st.markdown(f"<div class='card-header'>{modules[1]['icon']} {modules[1]['name']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='card-desc'>{modules[1]['desc']}</div>", unsafe_allow_html=True)
             if st.button("Open", key=modules[1]['key'], use_container_width=True):
                 st.session_state['nav_to'] = "Generate AP/FG/LG/LP"
                 st.rerun()
 
     with col3:
         with st.container(border=True):
-            st.markdown(f"### {modules[2]['icon']} {modules[2]['name']}")
-            st.caption(modules[2]['desc'])
+            st.markdown(f"<div class='card-header'>{modules[2]['icon']} {modules[2]['name']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='card-desc'>{modules[2]['desc']}</div>", unsafe_allow_html=True)
             if st.button("Open", key=modules[2]['key'], use_container_width=True):
                 st.session_state['nav_to'] = "Generate Assessment"
                 st.rerun()
@@ -96,43 +104,51 @@ def display_homepage():
 
     with col4:
         with st.container(border=True):
-            st.markdown(f"### {modules[3]['icon']} {modules[3]['name']}")
-            st.caption(modules[3]['desc'])
+            st.markdown(f"<div class='card-header'>{modules[3]['icon']} {modules[3]['name']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='card-desc'>{modules[3]['desc']}</div>", unsafe_allow_html=True)
             if st.button("Open", key=modules[3]['key'], use_container_width=True):
-                st.session_state['nav_to'] = "Generate Brochure v2"
+                st.session_state['nav_to'] = "Generate Brochure"
                 st.rerun()
 
     with col5:
         with st.container(border=True):
-            st.markdown(f"### {modules[4]['icon']} {modules[4]['name']}")
-            st.caption(modules[4]['desc'])
+            st.markdown(f"<div class='card-header'>{modules[4]['icon']} {modules[4]['name']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='card-desc'>{modules[4]['desc']}</div>", unsafe_allow_html=True)
             if st.button("Open", key=modules[4]['key'], use_container_width=True):
                 st.session_state['nav_to'] = "Add Assessment to AP"
                 st.rerun()
 
     with col6:
         with st.container(border=True):
-            st.markdown(f"### {modules[5]['icon']} {modules[5]['name']}")
-            st.caption(modules[5]['desc'])
+            st.markdown(f"<div class='card-header'>{modules[5]['icon']} {modules[5]['name']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='card-desc'>{modules[5]['desc']}</div>", unsafe_allow_html=True)
             if st.button("Open", key=modules[5]['key'], use_container_width=True):
                 st.session_state['nav_to'] = "Check Documents"
                 st.rerun()
 
     # Chat section header
-    st.markdown("### Chat with Courseware Orchestrator")
+    st.markdown("<div style='font-size: 1.1rem; font-weight: 600; margin-top: 1rem;'>Chat with Courseware Assistant</div>", unsafe_allow_html=True)
     st.caption("Ask questions or request help with courseware generation")
 
     # Initialize chat history
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = []
 
-    # Display chat messages
+    # Chat input directly below header using form to capture Enter key
+    with st.form(key="chat_form", clear_on_submit=True):
+        col_input, col_btn = st.columns([6, 1])
+        with col_input:
+            prompt = st.text_area("", placeholder="Ask about courseware generation or request help...", label_visibility="collapsed", height=100)
+        with col_btn:
+            submitted = st.form_submit_button("Submit", use_container_width=True, type="primary")
+
+    # Display chat messages below input
     for message in st.session_state.chat_messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Chat input
-    if prompt := st.chat_input("Ask about courseware generation or request help..."):
+    # Process message on form submission
+    if submitted and prompt and prompt.strip():
         # Add user message to history
         st.session_state.chat_messages.append({"role": "user", "content": prompt})
 
@@ -199,7 +215,7 @@ def display_homepage():
 
 st.set_page_config(layout="wide")
 
-# Custom CSS to increase sidebar width
+# Custom CSS to increase sidebar width and reduce padding
 st.markdown("""
 <style>
     [data-testid="stSidebar"] {
@@ -208,6 +224,34 @@ st.markdown("""
     }
     [data-testid="stSidebar"] > div:first-child {
         width: 350px;
+    }
+    /* Compact sidebar layout */
+    [data-testid="stSidebar"] .stSelectbox {
+        margin-bottom: 0.3rem;
+    }
+    [data-testid="stSidebar"] .stSelectbox label {
+        margin-bottom: 0.1rem;
+        font-size: 0.85rem;
+    }
+    /* Compact the option menu items */
+    [data-testid="stSidebar"] .nav-link {
+        padding: 0.4rem 0.8rem !important;
+        font-size: 0.9rem !important;
+    }
+    /* Reduce option menu container padding */
+    [data-testid="stSidebar"] .nav {
+        gap: 0.1rem !important;
+    }
+    /* Reduce vertical spacing in sidebar */
+    [data-testid="stSidebar"] .block-container {
+        padding-top: 0.5rem;
+    }
+    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div {
+        gap: 0.3rem;
+    }
+    /* Compact divider above settings */
+    [data-testid="stSidebar"] hr {
+        margin: 0.5rem 0 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -272,48 +316,113 @@ with st.sidebar:
     # Store selected company in session state for other modules
     st.session_state['selected_company'] = selected_company
 
-    # Model Selection
-    st.markdown("---")
-    from settings.api_manager import get_all_available_models
-    all_models = get_all_available_models()
-    model_names = list(all_models.keys())
+    # Model Selection (no divider for compact layout)
+    from settings.api_manager import get_all_available_models, get_all_api_key_configs, load_api_keys
+    from settings.api_database import get_all_models as db_get_all_models
 
-    # Find default model index (DeepSeek-V3.1 or first available)
-    default_model_idx = 0
-    for i, name in enumerate(model_names):
-        if "deepseek" in name.lower() and "v3" in name.lower():
-            default_model_idx = i
-            break
+    # Get all API key configurations and current keys
+    api_key_configs = get_all_api_key_configs()
+    current_keys = load_api_keys()
 
-    # Use default on first load, then respect user selection
-    if 'selected_model_idx' not in st.session_state:
-        st.session_state['selected_model_idx'] = default_model_idx
+    # Build API provider options (only show configured ones first, then unconfigured)
+    configured_providers = []
+    unconfigured_providers = []
+    for config in api_key_configs:
+        provider_name = config["key_name"].replace("_API_KEY", "")
+        display = config['display_name']
+        is_configured = bool(current_keys.get(config["key_name"], ""))
+        if is_configured:
+            configured_providers.append((provider_name, display))
+        else:
+            unconfigured_providers.append((provider_name, f"{display} (No API Key)"))
 
-    # Validate stored index
-    if st.session_state['selected_model_idx'] >= len(model_names):
-        st.session_state['selected_model_idx'] = default_model_idx
+    # Combine: configured first, then unconfigured
+    all_providers = configured_providers + unconfigured_providers
+    provider_names = [p[0] for p in all_providers]
+    provider_display = [p[1] for p in all_providers]
 
-    selected_model_idx = st.selectbox(
-        "Select Model:",
-        range(len(model_names)),
-        format_func=lambda x: model_names[x],
-        index=st.session_state['selected_model_idx']
+    # Default to OPENROUTER
+    if 'selected_api_provider' not in st.session_state:
+        st.session_state['selected_api_provider'] = "OPENROUTER"
+
+    # Find index of current provider
+    try:
+        default_provider_idx = provider_names.index(st.session_state['selected_api_provider'])
+    except ValueError:
+        default_provider_idx = 0
+
+    # API Provider selector
+    selected_provider_idx = st.selectbox(
+        "API Provider:",
+        range(len(provider_names)),
+        format_func=lambda x: provider_display[x],
+        index=default_provider_idx,
+        help="Select which API key to use for models"
     )
+    selected_provider = provider_names[selected_provider_idx]
+    st.session_state['selected_api_provider'] = selected_provider
 
-    # Store selection in session state
-    st.session_state['selected_model_idx'] = selected_model_idx
-    st.session_state['selected_model'] = model_names[selected_model_idx]
-    st.session_state['selected_model_config'] = all_models[model_names[selected_model_idx]]
+    # Get all models and filter by selected provider
+    all_db_models = db_get_all_models(include_builtin=True)
+    filtered_models = [m for m in all_db_models if m.get("api_provider", "OPENROUTER") == selected_provider]
 
-    st.markdown("---")
+    # If no models for this provider, show message
+    if not filtered_models:
+        st.warning(f"No models configured for {selected_provider}. Add models in Settings → Add Custom Model.")
+        model_names = []
+        st.session_state['selected_model'] = None
+        st.session_state['selected_model_config'] = None
+    else:
+        model_names = [m["name"] for m in filtered_models]
 
-    # Main features menu
+        # Find default model index (DeepSeek-V3 for OpenRouter, or first available)
+        default_model_idx = 0
+        if selected_provider == "OPENROUTER":
+            for i, name in enumerate(model_names):
+                if "deepseek" in name.lower() and "v3" in name.lower():
+                    default_model_idx = i
+                    break
+
+        # Reset model selection when provider changes
+        if 'last_api_provider' not in st.session_state:
+            st.session_state['last_api_provider'] = selected_provider
+        if st.session_state['last_api_provider'] != selected_provider:
+            st.session_state['selected_model_idx'] = default_model_idx
+            st.session_state['last_api_provider'] = selected_provider
+
+        # Use default on first load, then respect user selection
+        if 'selected_model_idx' not in st.session_state:
+            st.session_state['selected_model_idx'] = default_model_idx
+
+        # Validate stored index
+        if st.session_state['selected_model_idx'] >= len(model_names):
+            st.session_state['selected_model_idx'] = default_model_idx
+
+        selected_model_idx = st.selectbox(
+            "Select Model:",
+            range(len(model_names)),
+            format_func=lambda x: model_names[x],
+            index=st.session_state['selected_model_idx']
+        )
+
+        # Store selection in session state
+        st.session_state['selected_model_idx'] = selected_model_idx
+        st.session_state['selected_model'] = model_names[selected_model_idx]
+
+        # Get full model config with API key
+        all_models = get_all_available_models()
+        if model_names[selected_model_idx] in all_models:
+            st.session_state['selected_model_config'] = all_models[model_names[selected_model_idx]]
+        else:
+            st.session_state['selected_model_config'] = None
+
+    # Main features menu (no divider for compact layout)
     menu_options = [
         "Home",
         "Generate CP",
         "Generate AP/FG/LG/LP",
         "Generate Assessment",
-        "Generate Brochure v2",
+        "Generate Brochure",
         "Add Assessment to AP",
         "Check Documents",
     ]
@@ -344,9 +453,9 @@ with st.sidebar:
         default_index=default_idx,  # Default selected item
     )
 
-    # Separate Settings section using buttons
-    st.markdown("---")
-    st.markdown("##### Settings")
+    # Separate Settings section using buttons (compact)
+    st.markdown("<hr style='margin: 0.5rem 0;'>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size: 0.85rem; font-weight: 600; margin-bottom: 0.3rem;'>Settings</div>", unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
     with col1:
@@ -405,7 +514,7 @@ elif selected == "Check Documents":
     sup_doc = lazy_import_docs()
     sup_doc.app()
 
-elif selected == "Generate Brochure v2":
+elif selected == "Generate Brochure":
     st.session_state['settings_page'] = None
     brochure_generation = lazy_import_brochure_v2()
     brochure_generation.app()

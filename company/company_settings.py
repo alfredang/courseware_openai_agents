@@ -16,11 +16,21 @@ from typing import Dict, List, Any
 from PIL import Image
 
 from generate_ap_fg_lg_lp.utils.organizations import get_organizations, save_organizations
+from settings.admin_auth import is_authenticated, login_page, show_logout_button
 
 
 def company_management_app():
     """Company Management page"""
-    st.title("🏢 Company Management")
+    st.title("Company Management")
+
+    # Require authentication
+    if not is_authenticated():
+        login_page()
+        return
+
+    # Show logout button
+    show_logout_button()
+
     manage_company_settings()
 
 
@@ -88,10 +98,27 @@ def backup_company_files(company: Dict) -> bool:
 def display_company_list(organizations: List[Dict]):
     """Display searchable list of all companies"""
 
+    # Compact styling for company list
+    st.markdown("""
+    <style>
+        /* Compact company list rows */
+        div[data-testid="stHorizontalBlock"] {
+            gap: 0.5rem !important;
+        }
+        /* Reduce vertical spacing between rows */
+        .company-row {
+            padding: 0.3rem 0 !important;
+            margin: 0 !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
     # Search box
+    st.markdown("**🔍 Search Companies**")
     search_query = st.text_input(
-        "🔍 Search Companies",
+        "Search Companies",
         placeholder="Search by name, UEN, or address...",
+        label_visibility="collapsed",
         key="company_search"
     )
 
@@ -114,38 +141,41 @@ def display_company_list(organizations: List[Dict]):
         st.info("No companies found matching your search.")
         return
 
-    # Display as table/list
+    # Display as compact table/list
+    # Header row
+    hcol1, hcol2, hcol3, hcol4 = st.columns([3, 1.5, 3, 0.5])
+    with hcol1:
+        st.markdown("**Company Name**")
+    with hcol2:
+        st.markdown("**UEN**")
+    with hcol3:
+        st.markdown("**Address**")
+    with hcol4:
+        st.markdown("")  # Empty header for edit button
+
+    # Company rows
     for idx, company in enumerate(filtered_orgs):
-        with st.container():
-            col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+        col1, col2, col3, col4 = st.columns([3, 1.5, 3, 0.5])
 
-            with col1:
-                st.markdown(f"**{company['name']}**")
-                st.caption(f"UEN: {company.get('uen', 'N/A')}")
+        with col1:
+            st.markdown(f"**{company['name']}**", unsafe_allow_html=True)
 
-            with col2:
-                address = company.get('address', '')
-                if address:
-                    st.caption(address[:50] + "..." if len(address) > 50 else address)
-                else:
-                    st.caption("No address")
+        with col2:
+            st.markdown(f"{company.get('uen', 'N/A')}", unsafe_allow_html=True)
 
-            with col3:
-                # Show logo and template status
-                has_logo = "✅" if company.get('logo') else "❌"
-                templates = company.get('templates', {})
-                template_count = sum(1 for v in templates.values() if v)
-                st.caption(f"Logo: {has_logo} | Templates: {template_count}/4")
+        with col3:
+            address = company.get('address', '')
+            if address:
+                st.markdown(f"{address[:50]}{'...' if len(address) > 50 else ''}", unsafe_allow_html=True)
+            else:
+                st.markdown("<span style='color:#666'>-</span>", unsafe_allow_html=True)
 
-            with col4:
-                # Find original index for editing
-                original_idx = organizations.index(company)
-                if st.button("✏️", key=f"edit_btn_{idx}", help="Edit company"):
-                    st.session_state['edit_company_idx'] = original_idx
-                    st.session_state['company_view'] = 'edit'
-                    st.rerun()
-
-            st.divider()
+        with col4:
+            original_idx = organizations.index(company)
+            if st.button("✏️", key=f"edit_btn_{idx}", help="Edit company"):
+                st.session_state['edit_company_idx'] = original_idx
+                st.session_state['company_view'] = 'edit'
+                st.rerun()
 
 
 def manage_company_settings():

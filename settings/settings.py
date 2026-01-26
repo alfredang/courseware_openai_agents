@@ -10,6 +10,7 @@ Updated: 26 January 2026
 """
 
 import streamlit as st
+import requests
 from typing import Dict, List, Any
 
 # Import API management functions
@@ -21,16 +22,37 @@ from settings.api_manager import (
     add_custom_model,
     remove_custom_model,
     delete_api_key,
-    get_all_available_models
+    get_all_available_models,
+    # API key config functions
+    get_all_api_key_configs,
+    add_api_key_config,
+    remove_api_key_config,
+    get_api_providers_for_dropdown
 )
+from settings.api_database import (
+    refresh_builtin_models,
+    refresh_builtin_api_keys
+)
+from settings.admin_auth import is_authenticated, login_page, show_logout_button
 
 
 def app():
     """Main settings application - API & LLM Models only"""
     st.title("Settings")
 
+    # Require authentication
+    if not is_authenticated():
+        login_page()
+        return
+
+    # Show logout button
+    show_logout_button()
+
     # Force refresh of models on settings page load
     if st.button("Refresh Models", help="Click to refresh the model list"):
+        # Refresh built-in models and API keys from code
+        refresh_builtin_models()
+        refresh_builtin_api_keys()
         # Clear relevant session state
         if 'custom_models' in st.session_state:
             del st.session_state['custom_models']
@@ -38,6 +60,7 @@ def app():
             del st.session_state['api_keys']
         if 'all_models' in st.session_state:
             del st.session_state['all_models']
+        st.success("Models and API configurations refreshed!")
         st.rerun()
 
     # API & LLM Models section
@@ -48,116 +71,242 @@ def app():
 def llm_settings_app():
     """API & LLM Models page"""
     st.title("API & LLM Models")
+
+    # Require authentication
+    if not is_authenticated():
+        login_page()
+        return
+
+    # Show logout button
+    show_logout_button()
+
     manage_llm_settings()
 
 
 def manage_llm_settings():
     """Manage LLM Models and API Keys"""
 
-    # Create sub-tabs for API Keys and Models
-    api_tab, models_tab, custom_tab = st.tabs(["API Keys", "All Models", "Add Custom Model"])
+    # Initialize view state
+    if 'llm_settings_view' not in st.session_state:
+        st.session_state['llm_settings_view'] = 'api_keys'
 
-    with api_tab:
+    # View selector using columns with buttons (like Company Management)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("🔑 API Keys", use_container_width=True,
+                     type="primary" if st.session_state['llm_settings_view'] == 'api_keys' else "secondary"):
+            st.session_state['llm_settings_view'] = 'api_keys'
+            st.rerun()
+    with col2:
+        if st.button("📋 All Models", use_container_width=True,
+                     type="primary" if st.session_state['llm_settings_view'] == 'all_models' else "secondary"):
+            st.session_state['llm_settings_view'] = 'all_models'
+            st.rerun()
+    with col3:
+        if st.button("🔄 Update Models", use_container_width=True,
+                     type="primary" if st.session_state['llm_settings_view'] == 'update_models' else "secondary"):
+            st.session_state['llm_settings_view'] = 'update_models'
+            st.rerun()
+
+    st.markdown("---")
+
+    # Display based on current view
+    if st.session_state['llm_settings_view'] == 'api_keys':
         manage_api_keys()
-
-    with models_tab:
+    elif st.session_state['llm_settings_view'] == 'all_models':
         display_all_models()
+    elif st.session_state['llm_settings_view'] == 'update_models':
+        update_models_from_provider()
 
-    with custom_tab:
-        manage_custom_models()
+
+def update_secrets_toml(key_name: str, key_value: str) -> bool:
+    """Update or add an API key in .streamlit/secrets.toml"""
+    import os
+
+    secrets_path = ".streamlit/secrets.toml"
+
+    try:
+        # Create .streamlit directory if it doesn't exist
+        os.makedirs(".streamlit", exist_ok=True)
+
+        # Read existing content
+        existing_content = {}
+        if os.path.exists(secrets_path):
+            with open(secrets_path, 'r') as f:
+                content = f.read()
+                # Parse existing keys
+                for line in content.strip().split('\n'):
+                    line = line.strip()
+                    if '=' in line and not line.startswith('#'):
+                        k, v = line.split('=', 1)
+                        existing_content[k.strip()] = v.strip().strip('"').strip("'")
+
+        # Update or add the key
+        existing_content[key_name] = key_value
+
+        # Write back to file
+        with open(secrets_path, 'w') as f:
+            for k, v in existing_content.items():
+                f.write(f'{k} = "{v}"\n')
+
+        return True
+    except Exception as e:
+        st.error(f"Error updating secrets.toml: {e}")
+        return False
 
 
 def manage_api_keys():
     """Manage API Keys section"""
-    st.subheader("Existing API Keys")
-
-    # Info about where API keys are stored
-    st.info(
-        "**OpenRouter API key is recommended** - provides access to 38+ models from OpenAI, Anthropic, Google, DeepSeek, and more through a single key. "
-        "API keys are loaded from `.streamlit/secrets.toml` or environment variables."
-    )
-
-    # Load current API keys
+    # Load current API keys and configurations
     current_keys = load_api_keys()
+    api_key_configs = get_all_api_key_configs()
 
-    # Define the API keys to display (OpenAI and OpenRouter only)
-    api_key_names = [
-        "OPENROUTER_API_KEY",
-        "OPENAI_API_KEY",
-    ]
+    # Initialize editing state
+    if 'editing_api_key' not in st.session_state:
+        st.session_state['editing_api_key'] = None
 
-    # Display each API key (read-only view showing if configured)
-    for key_name in api_key_names:
-        col1, col2 = st.columns([2, 4])
+    # Display each API key
+    for config in api_key_configs:
+        key_name = config["key_name"]
+        display_name = config["display_name"]
+        description = config.get("description", "")
+        key_value = current_keys.get(key_name, "")
 
-        with col1:
-            st.markdown(f"**{key_name}**")
+        # Check if this key is being edited
+        is_editing = st.session_state['editing_api_key'] == key_name
 
-        with col2:
-            key_value = current_keys.get(key_name, "")
-            if key_value:
-                # Show masked key
-                masked = key_value[:8] + "..." + key_value[-4:] if len(key_value) > 12 else "****"
-                st.success(f"Configured ({masked})")
-            else:
-                st.warning("Not configured")
+        if is_editing:
+            # Edit mode - show input field
+            col1, col2, col3 = st.columns([2, 3, 1])
 
-    st.markdown("")
+            with col1:
+                st.markdown(f"**{key_name}**")
 
-    # Show help for configuring secrets
-    with st.expander("How to configure API keys"):
-        st.markdown("""
-        **Edit `.streamlit/secrets.toml`:**
-        ```toml
-        OPENROUTER_API_KEY = "sk-or-your-key-here"
-        OPENAI_API_KEY = "sk-your-key-here"
-        ```
+            with col2:
+                new_key = st.text_input(
+                    "Enter API Key",
+                    value="",
+                    type="password",
+                    key=f"input_{key_name}",
+                    placeholder="Paste your API key here...",
+                    label_visibility="collapsed"
+                )
 
-        **For Streamlit Cloud deployment:**
-        Add secrets in the Streamlit Cloud dashboard under Settings > Secrets.
+            with col3:
+                col3a, col3b = st.columns(2)
+                with col3a:
+                    if st.button("💾", key=f"save_{key_name}", help="Save"):
+                        if new_key:
+                            if update_secrets_toml(key_name, new_key):
+                                st.session_state['editing_api_key'] = None
+                                # Clear API keys cache to reload
+                                if 'api_keys' in st.session_state:
+                                    del st.session_state['api_keys']
+                                st.success(f"Saved!")
+                                st.rerun()
+                        else:
+                            st.warning("Enter a key")
+                with col3b:
+                    if st.button("✕", key=f"cancel_{key_name}", help="Cancel"):
+                        st.session_state['editing_api_key'] = None
+                        st.rerun()
+        else:
+            # View mode
+            col1, col2, col3 = st.columns([2, 3, 1])
 
-        **Recommended:** Use **OpenRouter API key** for access to 38+ models (OpenAI, Anthropic, Google, DeepSeek, Meta, Qwen, Mistral) through a single key. Get your key at [openrouter.ai](https://openrouter.ai).
-        """)
+            with col1:
+                st.markdown(f"**{key_name}**")
+
+            with col2:
+                if key_value:
+                    # Show masked key with asterisks and last 4 digits
+                    masked = "*" * 8 + key_value[-4:] if len(key_value) > 4 else "****"
+                    st.success(masked)
+                else:
+                    # Empty dark box for unconfigured keys
+                    st.markdown(
+                        "<div style='background-color: #1e1e1e; padding: 0.75rem 1rem; border-radius: 0.5rem; color: #666;'>&nbsp;</div>",
+                        unsafe_allow_html=True
+                    )
+
+            with col3:
+                if st.button("✏️", key=f"edit_{key_name}", help="Update API Key"):
+                    st.session_state['editing_api_key'] = key_name
+                    st.rerun()
+
 
 
 def display_all_models():
-    """Display all available models (built-in + custom)"""
-    st.subheader("Available LLM Models")
-
+    """Display all models from database (built-in + custom)"""
+    # Get all models from database
     all_models = get_all_available_models()
-    custom_models = load_custom_models()
-    custom_names = {m["name"] for m in custom_models}
 
-    # Separate built-in and custom models
-    builtin_data = []
-    custom_data = []
+    if not all_models:
+        st.info("No models available. Go to **Update Models** tab to fetch and add models from API providers.")
+        return
 
-    for model_name, config in all_models.items():
+    # Group models by API provider
+    models_by_provider = {}
+
+    for model_name, model in all_models.items():
+        api_provider = model.get("api_provider", "OPENROUTER")
+        temp_value = model["config"].get("temperature", "N/A")
+        is_builtin = model.get("is_builtin", False)
         model_info = {
             "Model": model_name,
-            "OpenRouter ID": config["config"].get("model", "N/A"),
-            "Temperature": config["config"].get("temperature", "N/A")
+            "ID": model["config"].get("model", "N/A"),
+            "Temperature": str(temp_value) if temp_value != "N/A" else "N/A",
+            "Available": "✓",
+            "_is_builtin": is_builtin,  # Hidden field for filtering
+            "_name": model_name  # Hidden field for removal
         }
 
-        if model_name in custom_names or config.get("is_builtin") is False:
-            custom_data.append(model_info)
-        else:
-            builtin_data.append(model_info)
+        if api_provider not in models_by_provider:
+            models_by_provider[api_provider] = []
+        models_by_provider[api_provider].append(model_info)
 
-    # Display built-in models
-    st.write("### Built-in Models")
-    st.caption(f"{len(builtin_data)} models available via OpenRouter")
-    if builtin_data:
-        st.dataframe(builtin_data, use_container_width=True, hide_index=True)
+    # Define provider display order
+    provider_order = ["OPENROUTER", "OPENAI", "ANTHROPIC", "GEMINI", "DEEPSEEK", "GROQ", "GROK"]
 
-    # Display custom models
-    if custom_data:
-        st.write("### Custom Models")
-        st.caption(f"{len(custom_data)} custom models added")
-        st.dataframe(custom_data, use_container_width=True, hide_index=True)
+    # Sort providers that have models by defined order
+    sorted_providers = sorted(models_by_provider.keys(), key=lambda x: provider_order.index(x) if x in provider_order else 999)
 
-        # Remove custom models section
-        st.write("#### Remove Custom Models")
+    # Filter by API Provider dropdown
+    st.markdown("**Filter by API Provider**")
+    available_providers = ["All Providers"] + sorted_providers
+    selected_filter = st.selectbox(
+        "Filter by API Provider",
+        options=available_providers,
+        index=0,
+        key="model_provider_filter",
+        label_visibility="collapsed"
+    )
+
+    # Display models grouped by provider
+    if selected_filter == "All Providers":
+        total_models = sum(len(models) for models in models_by_provider.values())
+        st.caption(f"{total_models} models available")
+        providers_to_show = sorted_providers
+    else:
+        total_models = len(models_by_provider.get(selected_filter, []))
+        st.caption(f"{total_models} models from {selected_filter}")
+        providers_to_show = [selected_filter]
+
+    for provider in providers_to_show:
+        models = models_by_provider.get(provider, [])
+        if models:
+            # Prepare display data (without hidden fields)
+            display_models = [
+                {k: v for k, v in m.items() if not k.startswith("_")}
+                for m in models
+            ]
+            with st.expander(f"{provider} ({len(models)} models)", expanded=(len(providers_to_show) == 1)):
+                st.dataframe(display_models, use_container_width=True, hide_index=True)
+
+    # Remove custom models section
+    custom_models = load_custom_models()
+    if custom_models:
+        st.write("### Remove Custom Models")
         for model in custom_models:
             col1, col2 = st.columns([4, 1])
             with col1:
@@ -173,98 +322,298 @@ def display_all_models():
                         st.error("Error removing model")
 
 
-def manage_custom_models():
-    """Manage Custom Models section"""
-    st.subheader("Add Custom Model")
+def _get_model_sort_key(model_id: str) -> tuple:
+    """
+    Generate a sort key for model IDs to sort from newest to oldest.
+    Higher versions and newer models come first.
+    """
+    import re
+    model_id_lower = model_id.lower()
 
-    st.info("Add any model available on OpenRouter. All models use your OpenRouter API key.")
+    # Priority tiers (lower number = higher priority/newer)
+    tier = 99
 
-    # Add custom model form
-    with st.form("add_custom_model"):
-        col1, col2 = st.columns(2)
+    # GPT models - prioritize by version
+    if "gpt-5.2" in model_id_lower:
+        tier = 1
+    elif "gpt-5.1" in model_id_lower:
+        tier = 2
+    elif "gpt-5" in model_id_lower and "gpt-5." not in model_id_lower:
+        tier = 3
+    elif "gpt-4.1" in model_id_lower:
+        tier = 4
+    elif "gpt-4o" in model_id_lower:
+        tier = 5
+    elif "gpt-4-turbo" in model_id_lower:
+        tier = 6
+    elif "gpt-4" in model_id_lower:
+        tier = 7
+    elif "o4" in model_id_lower:
+        tier = 8
+    elif "o3" in model_id_lower:
+        tier = 9
+    elif "o1" in model_id_lower:
+        tier = 10
+    elif "chatgpt" in model_id_lower:
+        tier = 15
+    elif "gpt-3" in model_id_lower:
+        tier = 20
 
+    # Claude models
+    elif "claude-opus-4.5" in model_id_lower or "claude-4.5" in model_id_lower:
+        tier = 1
+    elif "claude-sonnet-4.5" in model_id_lower:
+        tier = 2
+    elif "claude-opus-4" in model_id_lower or "claude-4" in model_id_lower:
+        tier = 3
+    elif "claude-sonnet-4" in model_id_lower:
+        tier = 4
+    elif "claude-3.5" in model_id_lower:
+        tier = 5
+    elif "claude-3" in model_id_lower:
+        tier = 6
+
+    # Gemini models
+    elif "gemini-3" in model_id_lower:
+        tier = 1
+    elif "gemini-2.5" in model_id_lower:
+        tier = 2
+    elif "gemini-2" in model_id_lower:
+        tier = 3
+    elif "gemini-1.5" in model_id_lower:
+        tier = 4
+    elif "gemini" in model_id_lower:
+        tier = 5
+
+    # Extract date from model ID if present (e.g., 2025-12-11 -> sort newer dates first)
+    date_match = re.search(r'(\d{4})-(\d{2})-(\d{2})', model_id)
+    date_sort = (0, 0, 0)
+    if date_match:
+        year, month, day = date_match.groups()
+        # Negate to sort descending (newer dates first)
+        date_sort = (-int(year), -int(month), -int(day))
+
+    return (tier, date_sort, model_id_lower)
+
+
+def fetch_models_from_provider(provider: str, api_key: str = "") -> List[Dict]:
+    """Fetch available models from API provider"""
+    models = []
+
+    try:
+        if provider == "OPENROUTER":
+            # OpenRouter public API - no auth required for model list
+            response = requests.get(
+                "https://openrouter.ai/api/v1/models",
+                timeout=30
+            )
+            if response.status_code == 200:
+                data = response.json()
+                for model in data.get("data", []):
+                    models.append({
+                        "id": model.get("id", ""),
+                        "name": model.get("name", model.get("id", "")),
+                        "context_length": model.get("context_length", "N/A"),
+                        "pricing": model.get("pricing", {})
+                    })
+
+        elif provider == "OPENAI" and api_key:
+            response = requests.get(
+                "https://api.openai.com/v1/models",
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=30
+            )
+            if response.status_code == 200:
+                data = response.json()
+                for model in data.get("data", []):
+                    model_id = model.get("id", "")
+                    # Filter to show chat/completion models (exclude embeddings, whisper, tts, dall-e, etc.)
+                    exclude_patterns = ["embedding", "whisper", "tts", "dall-e", "davinci", "babbage", "curie", "ada", "moderation"]
+                    if not any(x in model_id.lower() for x in exclude_patterns):
+                        models.append({
+                            "id": model_id,
+                            "name": model_id,
+                            "context_length": "N/A",
+                            "pricing": {}
+                        })
+
+        elif provider == "GROQ" and api_key:
+            response = requests.get(
+                "https://api.groq.com/openai/v1/models",
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=30
+            )
+            if response.status_code == 200:
+                data = response.json()
+                for model in data.get("data", []):
+                    models.append({
+                        "id": model.get("id", ""),
+                        "name": model.get("id", ""),
+                        "context_length": model.get("context_window", "N/A"),
+                        "pricing": {}
+                    })
+
+    except Exception as e:
+        st.error(f"Error fetching models: {e}")
+
+    # Sort models from newest to oldest
+    models.sort(key=lambda m: _get_model_sort_key(m["id"]))
+
+    return models
+
+
+def update_models_from_provider():
+    """Update models by fetching from API providers"""
+    st.caption("Fetch and add latest models from API providers")
+
+    # Get available API providers
+    api_providers = get_api_providers_for_dropdown()
+    provider_options = {p["display_name"]: p for p in api_providers}
+
+    # Provider selection
+    selected_provider_name = st.selectbox(
+        "Select API Provider",
+        options=list(provider_options.keys()),
+        index=0,
+        help="Choose provider to fetch models from"
+    )
+
+    selected_provider = provider_options.get(selected_provider_name, {})
+    provider_key = selected_provider.get("key_name", "OPENROUTER_API_KEY").replace("_API_KEY", "")
+    base_url = selected_provider.get("base_url", "https://openrouter.ai/api/v1")
+
+    # Get API key for this provider
+    api_keys = load_api_keys()
+    api_key = api_keys.get(f"{provider_key}_API_KEY", "")
+
+    # Initialize session state for fetched models
+    if 'fetched_models' not in st.session_state:
+        st.session_state['fetched_models'] = []
+    if 'fetched_provider' not in st.session_state:
+        st.session_state['fetched_provider'] = ""
+    if 'selected_models' not in st.session_state:
+        st.session_state['selected_models'] = set()
+
+    # Fetch models button
+    fetch_clicked = st.button("🔍 Fetch Models", type="primary")
+
+    if fetch_clicked:
+        if provider_key not in ["OPENROUTER"] and not api_key:
+            st.warning(f"API key required for {provider_key}. Add it in the API Keys tab.")
+        else:
+            with st.spinner(f"Fetching models from {provider_key}..."):
+                models = fetch_models_from_provider(provider_key, api_key)
+                if models:
+                    st.session_state['fetched_models'] = models
+                    st.session_state['fetched_provider'] = provider_key
+                    # Reset preselection and selection for new fetch
+                    st.session_state['selected_models'] = set()
+                    if 'existing_preselected' in st.session_state:
+                        del st.session_state['existing_preselected']
+                    st.success(f"Found {len(models)} models")
+                    st.rerun()  # Rerun to apply preselection
+                else:
+                    st.warning("No models found or API not accessible")
+                    st.session_state['fetched_models'] = []
+
+    # Display fetched models with checkboxes
+    if st.session_state['fetched_models'] and st.session_state['fetched_provider'] == provider_key:
+        models = st.session_state['fetched_models']
+
+        st.markdown("---")
+        st.caption(f"{len(models)} models available from {provider_key}")
+
+        # Search/filter
+        search = st.text_input("🔍 Filter models", placeholder="Type to filter...")
+
+        # Filter models
+        if search:
+            filtered_models = [m for m in models if search.lower() in m["id"].lower() or search.lower() in m["name"].lower()]
+        else:
+            filtered_models = models
+
+        # Get existing model IDs to check for duplicates
+        existing_models = get_all_available_models()
+        existing_ids = {config["config"].get("model", "") for config in existing_models.values()}
+
+        # Auto-select existing models on first load (so they appear checked)
+        if 'existing_preselected' not in st.session_state:
+            for m in filtered_models:
+                if m["id"] in existing_ids:
+                    st.session_state['selected_models'].add(m["id"])
+            st.session_state['existing_preselected'] = True
+
+        # Select all / Deselect all / Add Selected
+        col1, col2, col3 = st.columns([1, 1, 2])
         with col1:
-            model_name = st.text_input(
-                "Model Display Name *",
-                placeholder="e.g., My-Custom-GPT",
-                help="Friendly name shown in model selection dropdown"
-            )
-            model_id = st.text_input(
-                "OpenRouter Model ID *",
-                placeholder="e.g., openai/gpt-4o",
-                help="Get model IDs from openrouter.ai/models"
-            )
-
+            if st.button("Select All", use_container_width=True):
+                st.session_state['selected_models'] = {m["id"] for m in filtered_models}
+                st.rerun()
         with col2:
-            temperature = st.slider("Temperature", 0.0, 2.0, 0.2, 0.1)
-            st.caption("Lower = more focused, Higher = more creative")
+            if st.button("Deselect All", use_container_width=True):
+                st.session_state['selected_models'] = set()
+                st.rerun()
+        with col3:
+            # Count new models to add (not already in database)
+            new_models_to_add = [m for m in filtered_models
+                                 if m["id"] in st.session_state['selected_models']
+                                 and m["id"] not in existing_ids]
+            add_count = len(new_models_to_add)
 
-        # Always use OpenRouter
-        provider = "OpenAIChatCompletionClient"
-        base_url = "https://openrouter.ai/api/v1"
-        api_provider = "OPENROUTER"
+            if st.button(f"➕ Add {add_count} Selected", type="primary", use_container_width=True, disabled=(add_count == 0)):
+                added = 0
+                for model in new_models_to_add:
+                    model_id = model["id"]
+                    # Create display name from model ID
+                    display_name = model_id.replace("/", " - ").replace("-", " ").title()
 
-        submitted = st.form_submit_button("Add Model", type="primary")
+                    success = add_custom_model(
+                        name=display_name,
+                        provider=provider_key,
+                        model_id=model_id,
+                        base_url=base_url,
+                        temperature=0.2,
+                        api_provider=provider_key
+                    )
+                    if success:
+                        added += 1
 
-        if submitted:
-            if not model_name or not model_id:
-                st.error("Please fill in required fields: Model Display Name and Model ID")
-            elif "/" not in model_id:
-                st.error("Invalid model ID format. Must be in format: provider/model-name (e.g., openai/gpt-4o)")
-            elif model_id.count("/") > 1:
-                st.error("Invalid model ID format. Only one '/' allowed (e.g., openai/gpt-4o)")
-            elif len(model_id.split("/")[0]) < 2 or len(model_id.split("/")[1]) < 2:
-                st.error("Invalid model ID. Provider and model name must each be at least 2 characters")
-            else:
-                success = add_custom_model(
-                    name=model_name,
-                    provider=provider,
-                    model_id=model_id,
-                    base_url=base_url,
-                    temperature=temperature,
-                    api_provider=api_provider,
-                    custom_api_key=""
-                )
-
-                if success:
-                    st.success(f"Model '{model_name}' added successfully!")
+                if added > 0:
+                    st.success(f"Added {added} models!")
+                    # Clear caches
                     if 'custom_models' in st.session_state:
                         del st.session_state['custom_models']
+                    if 'all_models' in st.session_state:
+                        del st.session_state['all_models']
                     st.rerun()
                 else:
-                    st.error("Failed to add model. Name may already exist.")
+                    st.warning("No new models were added")
 
-    # Show popular model IDs for reference
-    with st.expander("Popular OpenRouter Model IDs"):
-        st.markdown("""
-        **OpenAI:**
-        - `openai/gpt-5` - GPT-5
-        - `openai/gpt-4.1` - GPT-4.1
-        - `openai/gpt-4o` - GPT-4o
-        - `openai/o3` - OpenAI o3 (reasoning)
+        # Display models in a scrollable container
+        st.markdown(f"**Showing {len(filtered_models)} models:**")
 
-        **Anthropic:**
-        - `anthropic/claude-opus-4.5` - Claude Opus 4.5
-        - `anthropic/claude-sonnet-4.5` - Claude Sonnet 4.5
-        - `anthropic/claude-sonnet-4` - Claude Sonnet 4
+        # Create checkboxes for each model
+        for model in filtered_models[:100]:  # Limit to 100 for performance
+            model_id = model["id"]
+            is_existing = model_id in existing_ids
 
-        **Google:**
-        - `google/gemini-3-pro-preview` - Gemini 3 Pro
-        - `google/gemini-2.5-flash` - Gemini 2.5 Flash
+            col1, col2 = st.columns([1, 5])
+            with col1:
+                checked = st.checkbox(
+                    "",
+                    value=model_id in st.session_state['selected_models'],
+                    key=f"chk_{model_id}"
+                )
+                if checked and model_id not in st.session_state['selected_models']:
+                    st.session_state['selected_models'].add(model_id)
+                elif not checked and model_id in st.session_state['selected_models']:
+                    st.session_state['selected_models'].discard(model_id)
 
-        **DeepSeek:**
-        - `deepseek/deepseek-chat` - DeepSeek V3
-        - `deepseek/deepseek-r1` - DeepSeek R1 (reasoning)
+            with col2:
+                st.markdown(f"<span style='color:#ffffff; font-size:1.1rem;'>{model_id}</span>", unsafe_allow_html=True)
 
-        **Qwen:**
-        - `qwen/qwq-32b` - QwQ 32B (reasoning)
-        - `qwen/qwen-2.5-72b-instruct` - Qwen 2.5 72B
-
-        **Meta:**
-        - `meta-llama/llama-3.3-70b-instruct` - Llama 3.3 70B
-
-        See full list at [openrouter.ai/models](https://openrouter.ai/models)
-        """)
+        if len(filtered_models) > 100:
+            st.caption(f"Showing first 100 of {len(filtered_models)} models. Use filter to narrow down.")
 
 
 if __name__ == "__main__":

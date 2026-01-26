@@ -689,20 +689,18 @@ def app():
         st.error(f"❌ Invalid model configuration for: {st.session_state['selected_model']}")
         return
         
-    # Get API key from config or load from Settings UI
+    # Get API key from config or load dynamically based on api_provider
     api_key = selected_config["config"].get("api_key")
-    
-    # If no API key in config, use OpenRouter (recommended) or OpenAI key
+
+    # If no API key in config, get it dynamically based on api_provider from database
     if not api_key:
-        # All models are accessed via OpenRouter - use OpenRouter API key
-        api_key = api_keys.get("OPENROUTER_API_KEY", "")
-        # Fallback to OpenAI API key for native OpenAI models
-        if not api_key:
-            api_key = api_keys.get("OPENAI_API_KEY", "")
+        api_provider = selected_config.get("api_provider", "OPENROUTER")
+        api_key = api_keys.get(f"{api_provider}_API_KEY", "")
     
     if not api_key:
-        st.error(f"❌ API key for {st.session_state['selected_model']} is not provided.")
-        st.info("💡 **Solution**: Go to Settings → LLM Models & API Keys to add the required API key")
+        api_provider = selected_config.get("api_provider", "OPENROUTER")
+        st.error(f"❌ API key for {st.session_state['selected_model']} ({api_provider}) is not provided.")
+        st.info(f"💡 **Solution**: Go to Settings → LLM Models & API Keys to add {api_provider}_API_KEY")
         return
     model_name = selected_config["config"]["model"]
     temperature = selected_config["config"].get("temperature", 0)

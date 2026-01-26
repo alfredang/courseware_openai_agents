@@ -157,16 +157,43 @@ MODEL_CHOICES = {
 
 def get_model_config(choice: str) -> Dict[str, Any]:
     """
-    Return the chosen model config dict, or default_config if unknown.
-    
+    Return the chosen model config dict from SQLite database, or fallback to static config.
+
     Args:
-        choice: The model choice string
-        
+        choice: The model choice string (model name)
+
     Returns:
-        Model configuration dictionary
+        Model configuration dictionary with api_provider for dynamic API key resolution
     """
-    # Use static model configurations only (bypassing UI API manager)
-    return MODEL_CHOICES.get(choice, default_config)
+    # First try to get from SQLite database (includes both built-in and custom models)
+    from settings.api_database import get_model_by_name
+
+    db_model = get_model_by_name(choice)
+    if db_model:
+        # Get API key dynamically based on api_provider
+        api_keys = load_api_keys()
+        api_provider = db_model.get("api_provider", "OPENROUTER")
+        api_key = api_keys.get(f"{api_provider}_API_KEY", "")
+
+        return {
+            "name": db_model["name"],
+            "provider": db_model["provider"],
+            "api_provider": api_provider,
+            "config": {
+                "model": db_model["config"]["model"],
+                "base_url": db_model["config"].get("base_url", "https://openrouter.ai/api/v1"),
+                "api_key": api_key,
+                "temperature": db_model["config"].get("temperature", 0.2),
+            }
+        }
+
+    # Fallback to static configurations
+    static_config = MODEL_CHOICES.get(choice, default_config)
+    if static_config:
+        # Add api_provider for consistency
+        return {**static_config, "api_provider": "OPENROUTER"}
+
+    return {**default_config, "api_provider": "OPENROUTER"}
 
 def get_all_model_choices() -> Dict[str, Dict[str, Any]]:
     """

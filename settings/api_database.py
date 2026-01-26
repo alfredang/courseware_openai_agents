@@ -86,18 +86,127 @@ def init_database():
             )
         """)
 
+        # API keys table (for custom API keys beyond OpenRouter/OpenAI)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key_name TEXT UNIQUE NOT NULL,
+                display_name TEXT NOT NULL,
+                base_url TEXT,
+                description TEXT,
+                is_configured INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         conn.commit()
+
+    # Seed built-in API key configurations
+    _seed_builtin_api_keys()
 
     # Seed built-in models if not already present
     _seed_builtin_models()
 
 
+# ============ Built-in API Keys Seed Data ============
+
+BUILTIN_API_KEYS = [
+    {
+        "key_name": "OPENROUTER_API_KEY",
+        "display_name": "OpenRouter",
+        "base_url": "https://openrouter.ai/api/v1",
+        "description": "Access 38+ models (OpenAI, Anthropic, Google, DeepSeek, Meta, Qwen, Mistral) through a single key"
+    },
+    {
+        "key_name": "OPENAI_API_KEY",
+        "display_name": "OpenAI",
+        "base_url": "https://api.openai.com/v1",
+        "description": "Direct access to OpenAI models (GPT-4, GPT-4o, o1, etc.)"
+    },
+    {
+        "key_name": "ANTHROPIC_API_KEY",
+        "display_name": "Anthropic",
+        "base_url": "https://api.anthropic.com/v1",
+        "description": "Direct access to Claude models"
+    },
+    {
+        "key_name": "GEMINI_API_KEY",
+        "display_name": "Gemini",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta",
+        "description": "Direct access to Google Gemini models"
+    },
+    {
+        "key_name": "GROQ_API_KEY",
+        "display_name": "Groq",
+        "base_url": "https://api.groq.com/openai/v1",
+        "description": "Fast inference with Groq LPU"
+    },
+    {
+        "key_name": "GROK_API_KEY",
+        "display_name": "Grok",
+        "base_url": "https://api.x.ai/v1",
+        "description": "Direct access to xAI Grok models"
+    },
+    {
+        "key_name": "DEEPSEEK_API_KEY",
+        "display_name": "DeepSeek",
+        "base_url": "https://api.deepseek.com/v1",
+        "description": "Direct access to DeepSeek models"
+    },
+]
+
+
+def _seed_builtin_api_keys():
+    """Seed the database with built-in API key configurations"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        for api_key in BUILTIN_API_KEYS:
+            try:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO api_keys
+                    (key_name, display_name, base_url, description)
+                    VALUES (?, ?, ?, ?)
+                """, (api_key["key_name"], api_key["display_name"],
+                      api_key["base_url"], api_key["description"]))
+            except Exception as e:
+                print(f"Error seeding API key {api_key['key_name']}: {e}")
+
+        conn.commit()
+
+
+def refresh_builtin_api_keys():
+    """Refresh built-in API key configs (update existing, add new ones)"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        for api_key in BUILTIN_API_KEYS:
+            try:
+                cursor.execute("""
+                    INSERT INTO api_keys
+                    (key_name, display_name, base_url, description)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(key_name) DO UPDATE SET
+                        display_name = excluded.display_name,
+                        base_url = excluded.base_url,
+                        description = excluded.description,
+                        updated_at = CURRENT_TIMESTAMP
+                """, (api_key["key_name"], api_key["display_name"],
+                      api_key["base_url"], api_key["description"]))
+            except Exception as e:
+                print(f"Error refreshing API key {api_key['key_name']}: {e}")
+
+        conn.commit()
+
+
 # ============ Built-in Models Seed Data ============
 
 BUILTIN_MODELS = [
-    # === OpenAI Models ===
-    {"name": "GPT-5", "model_id": "openai/gpt-5", "api_provider": "OPENROUTER", "sort_order": 1},
-    {"name": "GPT-5-Mini", "model_id": "openai/gpt-5-mini", "api_provider": "OPENROUTER", "sort_order": 2},
+    # === OpenAI Models (via OpenRouter) ===
+    {"name": "GPT-5.2", "model_id": "openai/gpt-5.2", "api_provider": "OPENROUTER", "sort_order": 1},
+    {"name": "GPT-5", "model_id": "openai/gpt-5", "api_provider": "OPENROUTER", "sort_order": 2},
+    {"name": "GPT-5-Mini", "model_id": "openai/gpt-5-mini", "api_provider": "OPENROUTER", "sort_order": 3},
     {"name": "GPT-4.1", "model_id": "openai/gpt-4.1", "api_provider": "OPENROUTER", "sort_order": 3},
     {"name": "GPT-4.1-Mini", "model_id": "openai/gpt-4.1-mini", "api_provider": "OPENROUTER", "sort_order": 4},
     {"name": "GPT-4.1-Nano", "model_id": "openai/gpt-4.1-nano", "api_provider": "OPENROUTER", "sort_order": 5},
@@ -109,7 +218,20 @@ BUILTIN_MODELS = [
     {"name": "o4-Mini", "model_id": "openai/o4-mini", "api_provider": "OPENROUTER", "sort_order": 11},
     {"name": "o1", "model_id": "openai/o1", "api_provider": "OPENROUTER", "sort_order": 12},
 
-    # === Anthropic Claude Models ===
+    # === OpenAI Models (Native API) ===
+    {"name": "OpenAI GPT-5.2", "model_id": "gpt-5.2", "api_provider": "OPENAI", "base_url": "https://api.openai.com/v1", "sort_order": 98},
+    {"name": "OpenAI GPT-5", "model_id": "gpt-5", "api_provider": "OPENAI", "base_url": "https://api.openai.com/v1", "sort_order": 99},
+    {"name": "OpenAI GPT-4.1", "model_id": "gpt-4.1", "api_provider": "OPENAI", "base_url": "https://api.openai.com/v1", "sort_order": 100},
+    {"name": "OpenAI GPT-4.1-Mini", "model_id": "gpt-4.1-mini", "api_provider": "OPENAI", "base_url": "https://api.openai.com/v1", "sort_order": 101},
+    {"name": "OpenAI GPT-4.1-Nano", "model_id": "gpt-4.1-nano", "api_provider": "OPENAI", "base_url": "https://api.openai.com/v1", "sort_order": 102},
+    {"name": "OpenAI GPT-4o", "model_id": "gpt-4o", "api_provider": "OPENAI", "base_url": "https://api.openai.com/v1", "sort_order": 103},
+    {"name": "OpenAI GPT-4o-Mini", "model_id": "gpt-4o-mini", "api_provider": "OPENAI", "base_url": "https://api.openai.com/v1", "sort_order": 104},
+    {"name": "OpenAI o3", "model_id": "o3", "api_provider": "OPENAI", "base_url": "https://api.openai.com/v1", "sort_order": 105},
+    {"name": "OpenAI o3-Mini", "model_id": "o3-mini", "api_provider": "OPENAI", "base_url": "https://api.openai.com/v1", "sort_order": 106},
+    {"name": "OpenAI o1", "model_id": "o1", "api_provider": "OPENAI", "base_url": "https://api.openai.com/v1", "sort_order": 107},
+    {"name": "OpenAI o1-Mini", "model_id": "o1-mini", "api_provider": "OPENAI", "base_url": "https://api.openai.com/v1", "sort_order": 108},
+
+    # === Anthropic Claude Models (via OpenRouter) ===
     {"name": "Claude-Opus-4.5", "model_id": "anthropic/claude-opus-4.5", "api_provider": "OPENROUTER", "sort_order": 20},
     {"name": "Claude-Sonnet-4.5", "model_id": "anthropic/claude-sonnet-4.5", "api_provider": "OPENROUTER", "sort_order": 21},
     {"name": "Claude-Opus-4", "model_id": "anthropic/claude-opus-4", "api_provider": "OPENROUTER", "sort_order": 22},
@@ -117,7 +239,16 @@ BUILTIN_MODELS = [
     {"name": "Claude-Haiku-4.5", "model_id": "anthropic/claude-haiku-4.5", "api_provider": "OPENROUTER", "sort_order": 24},
     {"name": "Claude-3.5-Sonnet", "model_id": "anthropic/claude-3.5-sonnet", "api_provider": "OPENROUTER", "sort_order": 25},
 
-    # === Google Gemini Models ===
+    # === Anthropic Claude Models (Native API) ===
+    {"name": "Anthropic Claude-Opus-4.5", "model_id": "claude-opus-4-5-20250514", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 118},
+    {"name": "Anthropic Claude-Sonnet-4.5", "model_id": "claude-sonnet-4-5-20250514", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 119},
+    {"name": "Anthropic Claude-Opus-4", "model_id": "claude-opus-4-20250514", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 120},
+    {"name": "Anthropic Claude-Sonnet-4", "model_id": "claude-sonnet-4-20250514", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 121},
+    {"name": "Anthropic Claude-3.5-Sonnet", "model_id": "claude-3-5-sonnet-20241022", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 122},
+    {"name": "Anthropic Claude-3.5-Haiku", "model_id": "claude-3-5-haiku-20241022", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 123},
+    {"name": "Anthropic Claude-3-Opus", "model_id": "claude-3-opus-20240229", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 124},
+
+    # === Google Gemini Models (via OpenRouter) ===
     {"name": "Gemini-3-Pro", "model_id": "google/gemini-3-pro-preview", "api_provider": "OPENROUTER", "sort_order": 30},
     {"name": "Gemini-2.5-Pro", "model_id": "google/gemini-2.5-pro", "api_provider": "OPENROUTER", "sort_order": 31},
     {"name": "Gemini-2.5-Flash", "model_id": "google/gemini-2.5-flash", "api_provider": "OPENROUTER", "sort_order": 32},
@@ -125,10 +256,37 @@ BUILTIN_MODELS = [
     {"name": "Gemini-2.0-Flash", "model_id": "google/gemini-2.0-flash-exp", "api_provider": "OPENROUTER", "sort_order": 34},
     {"name": "Gemini-Pro-1.5", "model_id": "google/gemini-pro-1.5", "api_provider": "OPENROUTER", "sort_order": 35},
 
-    # === DeepSeek Models ===
+    # === Google Gemini Models (Native API) ===
+    {"name": "Gemini 3.5-Pro", "model_id": "gemini-3.5-pro", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 130},
+    {"name": "Gemini 3.5-Flash", "model_id": "gemini-3.5-flash", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 131},
+    {"name": "Gemini 3-Pro", "model_id": "gemini-3-pro", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 132},
+    {"name": "Gemini 3-Flash", "model_id": "gemini-3-flash", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 133},
+    {"name": "Gemini 2.5-Pro", "model_id": "gemini-2.5-pro-preview-05-06", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 134},
+    {"name": "Gemini 2.5-Flash", "model_id": "gemini-2.5-flash-preview-05-20", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 135},
+    {"name": "Gemini 2.0-Flash", "model_id": "gemini-2.0-flash", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 136},
+    {"name": "Gemini 1.5-Pro", "model_id": "gemini-1.5-pro", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 137},
+    {"name": "Gemini 1.5-Flash", "model_id": "gemini-1.5-flash", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 138},
+
+    # === DeepSeek Models (via OpenRouter) ===
     {"name": "DeepSeek-V3", "model_id": "deepseek/deepseek-chat", "api_provider": "OPENROUTER", "sort_order": 40},
     {"name": "DeepSeek-R1", "model_id": "deepseek/deepseek-r1", "api_provider": "OPENROUTER", "sort_order": 41},
     {"name": "DeepSeek-R1-Distill-Qwen-32B", "model_id": "deepseek/deepseek-r1-distill-qwen-32b", "api_provider": "OPENROUTER", "sort_order": 42},
+
+    # === DeepSeek Models (Native API) ===
+    {"name": "DeepSeek Chat", "model_id": "deepseek-chat", "api_provider": "DEEPSEEK", "base_url": "https://api.deepseek.com/v1", "sort_order": 140},
+    {"name": "DeepSeek Reasoner", "model_id": "deepseek-reasoner", "api_provider": "DEEPSEEK", "base_url": "https://api.deepseek.com/v1", "sort_order": 141},
+
+    # === Groq Models (Native API) ===
+    {"name": "Groq Llama-3.3-70B", "model_id": "llama-3.3-70b-versatile", "api_provider": "GROQ", "base_url": "https://api.groq.com/openai/v1", "sort_order": 150},
+    {"name": "Groq Llama-3.1-8B", "model_id": "llama-3.1-8b-instant", "api_provider": "GROQ", "base_url": "https://api.groq.com/openai/v1", "sort_order": 151},
+    {"name": "Groq Mixtral-8x7B", "model_id": "mixtral-8x7b-32768", "api_provider": "GROQ", "base_url": "https://api.groq.com/openai/v1", "sort_order": 152},
+    {"name": "Groq Gemma2-9B", "model_id": "gemma2-9b-it", "api_provider": "GROQ", "base_url": "https://api.groq.com/openai/v1", "sort_order": 153},
+
+    # === xAI Grok Models (Native API) ===
+    {"name": "Grok 3", "model_id": "grok-3", "api_provider": "GROK", "base_url": "https://api.x.ai/v1", "sort_order": 160},
+    {"name": "Grok 3-Mini", "model_id": "grok-3-mini", "api_provider": "GROK", "base_url": "https://api.x.ai/v1", "sort_order": 161},
+    {"name": "Grok 2", "model_id": "grok-2-1212", "api_provider": "GROK", "base_url": "https://api.x.ai/v1", "sort_order": 162},
+    {"name": "Grok Vision", "model_id": "grok-2-vision-1212", "api_provider": "GROK", "base_url": "https://api.x.ai/v1", "sort_order": 163},
 
     # === Qwen Models ===
     {"name": "QwQ-32B", "model_id": "qwen/qwq-32b", "api_provider": "OPENROUTER", "sort_order": 50},
@@ -156,11 +314,12 @@ def _seed_builtin_models():
 
         for model in BUILTIN_MODELS:
             try:
+                base_url = model.get("base_url", "https://openrouter.ai/api/v1")
                 cursor.execute("""
                     INSERT OR IGNORE INTO llm_models
                     (name, provider, model_id, base_url, temperature, api_provider, is_builtin, sort_order)
-                    VALUES (?, 'OpenAIChatCompletionClient', ?, 'https://openrouter.ai/api/v1', 0.2, ?, 1, ?)
-                """, (model["name"], model["model_id"], model["api_provider"], model["sort_order"]))
+                    VALUES (?, 'OpenAIChatCompletionClient', ?, ?, 0.2, ?, 1, ?)
+                """, (model["name"], model["model_id"], base_url, model["api_provider"], model["sort_order"]))
             except Exception as e:
                 print(f"Error seeding model {model['name']}: {e}")
 
@@ -174,17 +333,20 @@ def refresh_builtin_models():
 
         for model in BUILTIN_MODELS:
             try:
+                base_url = model.get("base_url", "https://openrouter.ai/api/v1")
                 # Update if exists, insert if not
                 cursor.execute("""
                     INSERT INTO llm_models
                     (name, provider, model_id, base_url, temperature, api_provider, is_builtin, sort_order)
-                    VALUES (?, 'OpenAIChatCompletionClient', ?, 'https://openrouter.ai/api/v1', 0.2, ?, 1, ?)
+                    VALUES (?, 'OpenAIChatCompletionClient', ?, ?, 0.2, ?, 1, ?)
                     ON CONFLICT(name) DO UPDATE SET
                         model_id = excluded.model_id,
+                        base_url = excluded.base_url,
+                        api_provider = excluded.api_provider,
                         sort_order = excluded.sort_order,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE is_builtin = 1
-                """, (model["name"], model["model_id"], model["api_provider"], model["sort_order"]))
+                """, (model["name"], model["model_id"], base_url, model["api_provider"], model["sort_order"]))
             except Exception as e:
                 print(f"Error refreshing model {model['name']}: {e}")
 
@@ -480,3 +642,112 @@ def migrate_from_old_schema():
                 print("Migrated custom_models to llm_models table")
             except Exception as e:
                 print(f"Error during schema migration: {e}")
+
+
+# ============ API Keys Operations ============
+
+def get_all_api_key_configs() -> List[Dict[str, Any]]:
+    """Get all API key configurations from database"""
+    init_database()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM api_keys ORDER BY id")
+        rows = cursor.fetchall()
+
+        return [
+            {
+                "id": row["id"],
+                "key_name": row["key_name"],
+                "display_name": row["display_name"],
+                "base_url": row["base_url"],
+                "description": row["description"],
+                "is_configured": bool(row["is_configured"])
+            }
+            for row in rows
+        ]
+
+
+def get_api_key_config(key_name: str) -> Optional[Dict[str, Any]]:
+    """Get a specific API key configuration"""
+    init_database()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM api_keys WHERE key_name = ?", (key_name,))
+        row = cursor.fetchone()
+
+        if row:
+            return {
+                "id": row["id"],
+                "key_name": row["key_name"],
+                "display_name": row["display_name"],
+                "base_url": row["base_url"],
+                "description": row["description"],
+                "is_configured": bool(row["is_configured"])
+            }
+        return None
+
+
+def add_api_key_config(
+    key_name: str,
+    display_name: str,
+    base_url: str = "",
+    description: str = ""
+) -> bool:
+    """Add a new API key configuration"""
+    init_database()
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO api_keys (key_name, display_name, base_url, description)
+                VALUES (?, ?, ?, ?)
+            """, (key_name, display_name, base_url, description))
+            return True
+    except sqlite3.IntegrityError:
+        return False
+    except Exception as e:
+        print(f"Error adding API key config: {e}")
+        return False
+
+
+def update_api_key_configured_status(key_name: str, is_configured: bool) -> bool:
+    """Update the configured status of an API key"""
+    init_database()
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE api_keys SET is_configured = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE key_name = ?
+            """, (int(is_configured), key_name))
+            return cursor.rowcount > 0
+    except Exception as e:
+        print(f"Error updating API key status: {e}")
+        return False
+
+
+def delete_api_key_config(key_name: str) -> bool:
+    """Delete an API key configuration (only custom ones)"""
+    init_database()
+    # Don't allow deleting built-in keys
+    builtin_keys = {k["key_name"] for k in BUILTIN_API_KEYS}
+    if key_name in builtin_keys:
+        return False
+
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM api_keys WHERE key_name = ?", (key_name,))
+            return cursor.rowcount > 0
+    except Exception as e:
+        print(f"Error deleting API key config: {e}")
+        return False
+
+
+def api_key_config_exists(key_name: str) -> bool:
+    """Check if an API key configuration exists"""
+    init_database()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM api_keys WHERE key_name = ?", (key_name,))
+        return cursor.fetchone() is not None
