@@ -134,11 +134,11 @@ async def main(input_tsc) -> None:
             research_output = json.load(f)
 
     # Load CP Template with placeholders
-    with open('generate_cp/json_output/output_CP.json', 'r') as file:
+    with open('generate_cp/json_output/output_CP.json', 'r', encoding='utf-8') as file:
         output_CP = json.load(file)
 
     # Load mapping template with key:empty list pair
-    with open('generate_cp/json_output/mapping_source.json', 'r') as file:
+    with open('generate_cp/json_output/mapping_source.json', 'r', encoding='utf-8') as file:
         mapping_source = json.load(file)
 
     with open('generate_cp/json_output/ensemble_output.json', encoding='utf-8') as f:

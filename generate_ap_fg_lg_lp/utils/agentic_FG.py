@@ -42,49 +42,74 @@ import tempfile
 from docxtpl import DocxTemplate
 from generate_ap_fg_lg_lp.utils.helper import retrieve_excel_data, process_logo_image
 
-FG_TEMPLATE_DIR = "generate_ap_fg_lg_lp/input/Template/FG_TGS-Ref-No_Course-Title_v1.docx"  
-    
+FG_TEMPLATE_DIR = "generate_ap_fg_lg_lp/input/Template/FG_TGS-Ref-No_Course-Title_v1.docx"
+
 def generate_facilitators_guide(context: dict, name_of_organisation: str, sfw_dataset_dir=None) -> str:
     """
     Generates a Facilitator's Guide (FG) document by populating a DOCX template with course content.
 
-    This function retrieves course-related data from an Excel dataset, processes the organization's logo, 
+    This function retrieves course-related data from an Excel dataset, processes the organization's logo,
     and inserts all relevant details into a Facilitator's Guide template before saving the document.
 
     Args:
-        context (dict): 
+        context (dict):
             A dictionary containing course details that will be included in the guide.
-        name_of_organisation (str): 
+        name_of_organisation (str):
             The name of the organization, used to fetch and insert the corresponding logo.
-        sfw_dataset_dir (str, optional): 
-            The file path to the Excel dataset containing course-related data. If not provided, 
+        sfw_dataset_dir (str, optional):
+            The file path to the Excel dataset containing course-related data. If not provided,
             a default dataset file is used.
 
     Returns:
-        str: 
+        str:
             The file path of the generated Facilitator's Guide document.
 
     Raises:
-        FileNotFoundError: 
+        FileNotFoundError:
             If the template file, dataset file, or organization's logo file is missing.
-        KeyError: 
+        KeyError:
             If required keys are missing from the `context` dictionary.
-        IOError: 
+        IOError:
             If there are issues with reading/writing the document.
     """
-    
+
     # Use the provided template directory or default
     if sfw_dataset_dir is None:
         sfw_dataset_dir = "generate_ap_fg_lg_lp/input/dataset/Sfw_dataset-2022-03-30 copy.xlsx"
 
-    sfw_dataset_dir = "generate_ap_fg_lg_lp/input/dataset/Sfw_dataset-2022-03-30 copy.xlsx"
-    context = retrieve_excel_data(context, sfw_dataset_dir)
+    # Try to retrieve excel data if dataset file exists, otherwise skip
+    import os
+    if os.path.exists(sfw_dataset_dir):
+        context = retrieve_excel_data(context, sfw_dataset_dir)
+    else:
+        print(f"Dataset file not found at {sfw_dataset_dir}, continuing without it...")
 
     doc = DocxTemplate(FG_TEMPLATE_DIR)
-    
-    # Add the logo to the context
+
+    # Add the logo and organization details to the context
     context['company_logo'] = process_logo_image(doc, name_of_organisation)
     context['Name_of_Organisation'] = name_of_organisation
+
+    # Ensure UEN is set from organization data
+    from generate_ap_fg_lg_lp.utils.organizations import get_organizations, get_default_organization
+    organizations = get_organizations()
+    org = next((o for o in organizations if o["name"] == name_of_organisation), None)
+    if org and org.get("uen"):
+        context['UEN'] = org["uen"]
+    else:
+        # Fall back to default organization UEN
+        default_org = get_default_organization()
+        if default_org.get("uen"):
+            context['UEN'] = default_org["uen"]
+
+    # Add Document Version Control Record data
+    from datetime import datetime
+    current_date = datetime.now().strftime("%d %b %Y")
+    context['Rev_No'] = "1.0"
+    context['Effective_Date'] = current_date
+    context['Author'] = ""
+    context['Reviewed_By'] = ""
+    context['Approved_By'] = ""
 
     doc.render(context, autoescape=True)
     # Use a temporary file to save the document

@@ -55,26 +55,65 @@ class Organization(BaseModel):
     logo: Optional[str] = None
 
 def load_organizations():
+    # First try to load from JSON file
     if os.path.exists(ORG_FILE):
         with open(ORG_FILE, "r") as f:
             return json.load(f)
-    return []
+    # Fall back to database if JSON file doesn't exist
+    try:
+        from company.database import get_all_organizations
+        return get_all_organizations()
+    except Exception as e:
+        print(f"Error loading organizations from database: {e}")
+        return []
 
 def save_organizations(org_list):
+    # Save to JSON file
     with open(ORG_FILE, "w") as f:
         json.dump(org_list, f, indent=4)
 
+def _use_database():
+    """Check if we should use the database (when JSON file doesn't exist)"""
+    return not os.path.exists(ORG_FILE)
+
 def add_organization(org):
+    if _use_database():
+        try:
+            from company.database import add_organization as db_add_organization
+            db_add_organization(org.dict())
+            return
+        except Exception as e:
+            print(f"Error adding organization to database: {e}")
     org_list = load_organizations()
     org_list.append(org.dict())
     save_organizations(org_list)
 
 def update_organization(index, org):
+    if _use_database():
+        try:
+            from company.database import get_all_organizations, update_organization_by_name
+            orgs = get_all_organizations()
+            if index < len(orgs):
+                old_name = orgs[index]["name"]
+                update_organization_by_name(old_name, org.dict())
+                return
+        except Exception as e:
+            print(f"Error updating organization in database: {e}")
     org_list = load_organizations()
     org_list[index] = org.dict()
     save_organizations(org_list)
 
 def delete_organization(index):
+    if _use_database():
+        try:
+            from company.database import get_all_organizations, delete_organization_by_name
+            orgs = get_all_organizations()
+            if index < len(orgs):
+                name = orgs[index]["name"]
+                delete_organization_by_name(name)
+                return
+        except Exception as e:
+            print(f"Error deleting organization from database: {e}")
     org_list = load_organizations()
     org_list.pop(index)
     save_organizations(org_list)

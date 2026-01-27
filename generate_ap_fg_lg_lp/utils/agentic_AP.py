@@ -417,11 +417,38 @@ def generate_assessment_plan(context: dict, name_of_organisation, sfw_dataset_di
 
     doc = DocxTemplate(AP_TEMPLATE_DIR)
 
-    context = retrieve_excel_data(context, sfw_dataset_dir)
+    # Try to retrieve excel data if dataset file exists, otherwise skip
+    import os
+    if os.path.exists(sfw_dataset_dir):
+        context = retrieve_excel_data(context, sfw_dataset_dir)
+    else:
+        print(f"Dataset file not found at {sfw_dataset_dir}, continuing without it...")
 
-    # Add the logo to the context
+    # Add the logo and organization details to the context
     context['company_logo'] = process_logo_image(doc, name_of_organisation)
     context['Name_of_Organisation'] = name_of_organisation
+
+    # Ensure UEN is set from organization data
+    from generate_ap_fg_lg_lp.utils.organizations import get_organizations, get_default_organization
+    organizations = get_organizations()
+    org = next((o for o in organizations if o["name"] == name_of_organisation), None)
+    if org and org.get("uen"):
+        context['UEN'] = org["uen"]
+    else:
+        # Fall back to default organization UEN
+        default_org = get_default_organization()
+        if default_org.get("uen"):
+            context['UEN'] = default_org["uen"]
+
+    # Add Document Version Control Record data
+    from datetime import datetime
+    current_date = datetime.now().strftime("%d %b %Y")
+    context['Rev_No'] = "1.0"
+    context['Effective_Date'] = current_date
+    context['Author'] = ""
+    context['Reviewed_By'] = ""
+    context['Approved_By'] = ""
+
     doc.render(context, autoescape=True)
 
     # Use a temporary file to save the document
@@ -457,6 +484,27 @@ def generate_asr_document(context: dict, name_of_organisation) -> str:
 
     doc = DocxTemplate(ASR_TEMPLATE_DIR)
     context['Name_of_Organisation'] = name_of_organisation
+
+    # Ensure UEN is set from organization data
+    from generate_ap_fg_lg_lp.utils.organizations import get_organizations, get_default_organization
+    organizations = get_organizations()
+    org = next((o for o in organizations if o["name"] == name_of_organisation), None)
+    if org and org.get("uen"):
+        context['UEN'] = org["uen"]
+    else:
+        # Fall back to default organization UEN
+        default_org = get_default_organization()
+        if default_org.get("uen"):
+            context['UEN'] = default_org["uen"]
+
+    # Add Document Version Control Record data
+    from datetime import datetime
+    current_date = datetime.now().strftime("%d %b %Y")
+    context['Rev_No'] = "1.0"
+    context['Effective_Date'] = current_date
+    context['Author'] = ""
+    context['Reviewed_By'] = ""
+    context['Approved_By'] = ""
 
     doc.render(context)
 

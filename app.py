@@ -472,8 +472,17 @@ with st.sidebar:
     # Handle navigation from homepage boxes
     nav_to = st.session_state.get('nav_to', None)
     if nav_to and nav_to in menu_options:
-        default_idx = menu_options.index(nav_to)
+        st.session_state['current_page'] = nav_to
         st.session_state['nav_to'] = None  # Clear after use
+
+    # Initialize current page if not set
+    if 'current_page' not in st.session_state:
+        st.session_state['current_page'] = "Home"
+
+    # Get the default index based on current page
+    current_page = st.session_state['current_page']
+    if current_page in menu_options:
+        default_idx = menu_options.index(current_page)
     else:
         default_idx = 0
 
@@ -484,6 +493,10 @@ with st.sidebar:
         menu_icon="boxes",  # Icon for the sidebar title
         default_index=default_idx,  # Default selected item
     )
+
+    # Update current page when menu selection changes
+    if selected != current_page:
+        st.session_state['current_page'] = selected
 
     # Separate Settings section using buttons (compact)
     st.markdown("<hr style='margin: 0.5rem 0;'>", unsafe_allow_html=True)

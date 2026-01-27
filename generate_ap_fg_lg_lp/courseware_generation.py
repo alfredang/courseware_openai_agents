@@ -182,15 +182,21 @@ class AssessmentMethodDetail(BaseModel):
     Retention_Period: Optional[str] = None
 
 class CourseData(BaseModel):
-    Date: str 
+    Date: str
     Year: str
     Name_of_Organisation: str
     Course_Title: str
     TSC_Title: str
     TSC_Code: str
-    Total_Training_Hours: str 
-    Total_Assessment_Hours: str 
-    Total_Course_Duration_Hours: str 
+    TSC_Category: Optional[str] = None
+    TSC_Description: Optional[str] = None
+    TSC_Sector: Optional[str] = None
+    Proficiency_Level: Optional[str] = None
+    Proficiency_Description: Optional[str] = None
+    Skills_Framework: Optional[str] = None
+    Total_Training_Hours: str
+    Total_Assessment_Hours: str
+    Total_Course_Duration_Hours: str
     Learning_Units: List[LearningUnit]
     Assessment_Methods_Details: List[AssessmentMethodDetail]
 
@@ -374,8 +380,14 @@ async def interpret_cp(raw_data: dict, model_choice: str = "GPT-4o-Mini") -> dic
 
         - Name of Organisation
         - Course Title
-        - TSC Title
-        - TSC Code
+        - TSC Title (the title of the Technical Skill/Competency)
+        - TSC Code (e.g., "LOG-TEM-5008-1.1", "ICT-DBA-4002-1.1")
+        - TSC_Category (the category/cluster of the TSC - look for "TSC Category", "Category", "Competency Category", or "Track" in the CP. Examples: "Business and Project Management", "Operations Management", "Customer Experience", "Information and Communications Technology")
+        - TSC_Description (the FULL description of what the Technical Skill/Competency covers - look for "TSC Description", "Competency Description", or the description text near the TSC Title. This should be a complete sentence describing the competency, e.g., "Explore opportunities for business innovation and reform, and lead the implementation of innovative business initiatives" or "Apply knowledge of warehousing operations to manage inventory and storage effectively")
+        - TSC_Sector (the sector/domain - look for "Sector", "Industry", or "Skills Framework Sector". Examples: "Logistics", "Infocomm Technology", "Hotel and Accommodation Services")
+        - Proficiency_Level (the proficiency level - look for "Proficiency Level" or "Level". Examples: "Level 1", "Level 2", "Level 3", "Level 4", "Level 5")
+        - Proficiency_Description (description of what the proficiency level means - if provided in the CP)
+        - Skills_Framework (the name of the Skills Framework - look for "Skills Framework" or derive from sector. Examples: "Skills Framework for Logistics", "Skills Framework for ICT", "Skills Framework for Hotel and Accommodation Services")
         - Total Training Hours/ Total Instructional Duration (calculated as the sum of Classroom Facilitation, Workplace Learning: On-the-Job (OJT), Practicum, Practical, E-learning: Synchronous and Asynchronous), formatted with units (e.g., "30 hrs", "1 hr")
         - Total Assessment Hours/ Total Assessment Duration, formatted with units (e.g., "2 hrs")
         - Total Course Duration Hours, formatted with units (e.g., "42 hrs")
@@ -480,12 +492,178 @@ async def interpret_cp(raw_data: dict, model_choice: str = "GPT-4o-Mini") -> dic
             print(f"Raw response (truncated): {raw_content[:1000]}...")
             raise Exception(f"Failed to parse JSON from model response. Raw content: {raw_content[:500]}...")
 
+        # Debug: Print all extracted keys and their types
+        print(f"DEBUG: Extracted context keys: {list(context.keys())}")
+        print(f"DEBUG: TSC_Description = {context.get('TSC_Description')}")
+        print(f"DEBUG: Skills_Framework = {context.get('Skills_Framework')}")
+        print(f"DEBUG: Learning_Units count = {len(context.get('Learning_Units', []))}")
+
         # Debug: Check if K and A statements were extracted
-        if "Learning_Units" in context:
+        if "Learning_Units" in context and context["Learning_Units"]:
             for lu in context["Learning_Units"]:
                 k_count = len(lu.get("K_numbering_description", []))
                 a_count = len(lu.get("A_numbering_description", []))
                 print(f"LU: {lu.get('LU_Title', 'Unknown')} - K statements: {k_count}, A statements: {a_count}")
+        else:
+            print("WARNING: Learning_Units is empty or missing!")
+
+        # Helper to check if a value is effectively null/empty
+        def is_empty(val):
+            return val is None or val == "" or val == "null" or val == "None"
+
+        # Fill in missing TSC/Skills Framework fields based on TSC Code
+        tsc_code = context.get("TSC_Code", "")
+        if tsc_code:
+            # TSC Code format: XXX-YYY-ZZZZ-N.N (e.g., LOG-TEM-5008-1.1, HAS-CEX-4001-1.1)
+            sector_abbr = tsc_code.split("-")[0] if "-" in tsc_code else ""
+            print(f"DEBUG: TSC Code = {tsc_code}, Sector Abbreviation = {sector_abbr}")
+
+            # Sector mapping based on TSC Code prefix
+            sector_mapping = {
+                "LOG": ("Logistics", "Skills Framework for Logistics"),
+                "ICT": ("Infocomm Technology", "Skills Framework for Infocomm Technology"),
+                "FIN": ("Financial Services", "Skills Framework for Financial Services"),
+                "HR": ("Human Resource", "Skills Framework for Human Resource"),
+                "MFG": ("Manufacturing", "Skills Framework for Manufacturing"),
+                "RET": ("Retail", "Skills Framework for Retail"),
+                "SEC": ("Security", "Skills Framework for Security"),
+                "TOU": ("Tourism", "Skills Framework for Tourism"),
+                "HEA": ("Healthcare", "Skills Framework for Healthcare"),
+                "EDU": ("Education", "Skills Framework for Training and Adult Education"),
+                "HAS": ("Hotel and Accommodation Services", "Skills Framework for Hotel and Accommodation Services"),
+                "FBS": ("Food Services", "Skills Framework for Food Services"),
+                "ATT": ("Attractions", "Skills Framework for Attractions"),
+                "TAE": ("Training and Adult Education", "Skills Framework for Training and Adult Education"),
+                "SER": ("Services", "Skills Framework for Services"),
+                "AIR": ("Air Transport", "Skills Framework for Air Transport"),
+                "SEA": ("Sea Transport", "Skills Framework for Sea Transport"),
+                "LND": ("Land Transport", "Skills Framework for Land Transport"),
+                "ENE": ("Energy and Chemicals", "Skills Framework for Energy and Chemicals"),
+                "AER": ("Aerospace", "Skills Framework for Aerospace"),
+                "BIO": ("Biopharmaceutical Manufacturing", "Skills Framework for Biopharmaceutical Manufacturing"),
+                "MED": ("Media", "Skills Framework for Media"),
+                "DES": ("Design", "Skills Framework for Design"),
+                "BCE": ("Built Environment", "Skills Framework for Built Environment"),
+                "MAR": ("Marine and Offshore", "Skills Framework for Marine and Offshore"),
+                "PRE": ("Precision Engineering", "Skills Framework for Precision Engineering"),
+                "WSH": ("Workplace Safety and Health", "Skills Framework for Workplace Safety and Health"),
+                "PUB": ("Public Service", "Skills Framework for Public Service"),
+                "SOC": ("Social Service", "Skills Framework for Social Service"),
+                "EAC": ("Early Childhood", "Skills Framework for Early Childhood"),
+            }
+
+            if sector_abbr in sector_mapping:
+                sector_name, skills_framework_full = sector_mapping[sector_abbr]
+                print(f"DEBUG: Found mapping - Sector: {sector_name}, Skills Framework: {skills_framework_full}")
+
+                # Always override with correct full names (AI might return abbreviations)
+                current_sf = context.get("Skills_Framework", "")
+                # Override if empty OR if it's just the abbreviation
+                if is_empty(current_sf) or current_sf == sector_abbr or len(str(current_sf)) <= 5:
+                    context["Skills_Framework"] = skills_framework_full
+                    print(f"DEBUG: Set Skills_Framework to: {skills_framework_full}")
+
+                current_sector = context.get("TSC_Sector", "")
+                if is_empty(current_sector) or current_sector == sector_abbr or len(str(current_sector)) <= 5:
+                    context["TSC_Sector"] = sector_name
+                    print(f"DEBUG: Set TSC_Sector to: {sector_name}")
+
+                current_category = context.get("TSC_Category", "")
+                if is_empty(current_category) or current_category == sector_abbr or len(str(current_category)) <= 5:
+                    context["TSC_Category"] = sector_name
+                    print(f"DEBUG: Set TSC_Category to: {sector_name}")
+                # Set TSC_Sector_Abbr to full Skills Framework name (template uses this for Skills Framework field)
+                # Note: Template placeholder {{TSC_Sector_Abbr}} is displayed in the "Skills Framework" row
+                context["TSC_Sector_Abbr"] = skills_framework_full
+                print(f"DEBUG: Set TSC_Sector_Abbr (for Skills Framework display) to: {skills_framework_full}")
+            else:
+                print(f"DEBUG: Sector abbreviation '{sector_abbr}' not found in mapping")
+                # Use the sector abbreviation as fallback
+                if is_empty(context.get("TSC_Sector_Abbr")):
+                    context["TSC_Sector_Abbr"] = sector_abbr
+
+            # Try to extract proficiency level from TSC Code (last number before decimal)
+            import re
+            level_match = re.search(r'-(\d+)\.\d+$', tsc_code)
+            if level_match:
+                level_num = level_match.group(1)
+                if is_empty(context.get("Proficiency_Level")):
+                    context["Proficiency_Level"] = f"Level {level_num}"
+
+        # Generate TSC_Description from Learning Outcomes if not set
+        print(f"DEBUG: TSC_Description before fallback = {context.get('TSC_Description')}")
+        print(f"DEBUG: TSC_Title = {context.get('TSC_Title')}")
+        print(f"DEBUG: Learning_Units count = {len(context.get('Learning_Units', []))}")
+        print(f"DEBUG: is_empty(TSC_Description) = {is_empty(context.get('TSC_Description'))}")
+
+        if is_empty(context.get("TSC_Description")):
+            # Try to generate a meaningful description from Learning Outcomes
+            learning_units = context.get("Learning_Units", [])
+            if learning_units:
+                # Collect all LO descriptions to build a meaningful TSC description
+                lo_descriptions = []
+                for lu in learning_units:
+                    lo = lu.get("LO", "")
+                    if lo:
+                        # Remove the "LOx: " prefix if present
+                        lo_text = lo.split(": ", 1)[-1] if ": " in lo else lo
+                        lo_descriptions.append(lo_text)
+
+                if lo_descriptions:
+                    # Create a description based on the first LO
+                    context["TSC_Description"] = lo_descriptions[0]
+                    print(f"DEBUG: Set TSC_Description from LO: {context['TSC_Description']}")
+                elif context.get("TSC_Title"):
+                    context["TSC_Description"] = context.get("TSC_Title")
+                    print(f"DEBUG: Set TSC_Description to TSC_Title: {context['TSC_Description']}")
+            elif context.get("TSC_Title"):
+                context["TSC_Description"] = context.get("TSC_Title")
+                print(f"DEBUG: Set TSC_Description to TSC_Title: {context['TSC_Description']}")
+
+        # If TSC_Description is still empty, generate from course title
+        if is_empty(context.get("TSC_Description")):
+            course_title = context.get("Course_Title", "")
+            tsc_title = context.get("TSC_Title", "")
+            if tsc_title:
+                context["TSC_Description"] = f"Apply knowledge and skills in {tsc_title.lower()} to meet organizational and industry requirements."
+                print(f"DEBUG: Generated TSC_Description from TSC_Title: {context['TSC_Description']}")
+            elif course_title:
+                context["TSC_Description"] = f"Apply knowledge and skills in {course_title.lower()} to meet organizational and industry requirements."
+                print(f"DEBUG: Generated TSC_Description from Course_Title: {context['TSC_Description']}")
+
+        # IMPORTANT: Template uses Proficiency_Description for TSC Description field
+        # Copy TSC_Description to Proficiency_Description for template compatibility
+        if context.get("TSC_Description") and is_empty(context.get("Proficiency_Description")):
+            context["Proficiency_Description"] = context.get("TSC_Description")
+            print(f"DEBUG: Set Proficiency_Description (for TSC Description display) to: {context['Proficiency_Description']}")
+
+        # Final cleanup - ensure no None values for TSC fields that should have defaults
+        tsc_title = context.get("TSC_Title", "")
+        tsc_description = context.get("TSC_Description", tsc_title)
+
+        tsc_fields_with_defaults = {
+            "TSC_Category": tsc_title,
+            "TSC_Sector": tsc_title,
+            "TSC_Description": tsc_title,
+            "Skills_Framework": "",
+            "Proficiency_Level": "",
+            "Proficiency_Description": tsc_description,  # Template uses this for TSC Description
+            "TSC_Sector_Abbr": context.get("Skills_Framework", ""),  # Template uses this for Skills Framework
+        }
+
+        for field, default_value in tsc_fields_with_defaults.items():
+            if is_empty(context.get(field)):
+                context[field] = default_value
+                print(f"DEBUG: Applied default for {field}: {default_value}")
+
+        # Final debug log for TSC fields
+        print(f"DEBUG: Final TSC_Category = {context.get('TSC_Category')}")
+        print(f"DEBUG: Final TSC_Sector = {context.get('TSC_Sector')}")
+        print(f"DEBUG: Final Skills_Framework = {context.get('Skills_Framework')}")
+        print(f"DEBUG: Final TSC_Description = {context.get('TSC_Description')}")
+        print(f"DEBUG: Final Proficiency_Description (template TSC Desc) = {context.get('Proficiency_Description')}")
+        print(f"DEBUG: Final TSC_Sector_Abbr (template Skills Framework) = {context.get('TSC_Sector_Abbr')}")
+        print(f"DEBUG: Final Learning_Units count = {len(context.get('Learning_Units', []))}")
 
         return context
 
@@ -744,7 +922,7 @@ def app():
                         with st.spinner('Generating Learning Guide...'):
                             lg_output = generate_learning_guide(context, selected_org, model_choice)
                         if lg_output:
-                            st.success(f"Learning Guide generated: {lg_output}")
+                            st.success("Learning Guide generated successfully!")
                             st.session_state['lg_output'] = lg_output  # Store output path in session state
                     except Exception as e:
                         st.error(f"Error generating Learning Guide: {e}")
@@ -756,11 +934,11 @@ def app():
                             ap_output, asr_output = generate_assessment_documents(context, selected_org, None, model_name, api_key, base_url)
                         
                         if ap_output:
-                            st.success(f"Assessment Plan generated: {ap_output}")
+                            st.success("Assessment Plan generated successfully!")
                             st.session_state['ap_output'] = ap_output  # Store output path in session state
 
                         if asr_output:
-                            st.success(f"Assessment Summary Record generated: {asr_output}")
+                            st.success("Assessment Summary Record generated successfully!")
                             st.session_state['asr_output'] = asr_output  # Store output path in session state
 
                     except Exception as e:
@@ -773,7 +951,12 @@ def app():
                 if needs_timetable and 'lesson_plan' not in context:
                     try:
                         with st.spinner("Generating Timetable..."):
-                            hours = int(''.join(filter(str.isdigit, context["Total_Course_Duration_Hours"])))
+                            # Safely get Total_Course_Duration_Hours with fallback
+                            duration_str = context.get("Total_Course_Duration_Hours", "")
+                            if not duration_str:
+                                # Try alternative key names
+                                duration_str = context.get("Total_Training_Hours", "") or context.get("Total_Course_Duration", "") or "16 hrs"
+                            hours = int(''.join(filter(str.isdigit, str(duration_str))) or "16")
                             num_of_days = hours / 8
                             timetable_data = asyncio.run(generate_timetable(context, num_of_days, model_choice))
                             context['lesson_plan'] = timetable_data['lesson_plan']
@@ -788,7 +971,7 @@ def app():
                         with st.spinner("Generating Lesson Plan..."):
                             lp_output = generate_lesson_plan(context, selected_org)
                         if lp_output:
-                            st.success(f"Lesson Plan generated: {lp_output}")
+                            st.success("Lesson Plan generated successfully!")
                             st.session_state['lp_output'] = lp_output  # Store output path in session state
      
                     except Exception as e:
@@ -800,7 +983,7 @@ def app():
                         with st.spinner("Generating Facilitator's Guide..."):
                             fg_output = generate_facilitators_guide(context, selected_org)
                         if fg_output:
-                            st.success(f"Facilitator's Guide generated: {fg_output}")
+                            st.success("Facilitator's Guide generated successfully!")
                             st.session_state['fg_output'] = fg_output  # Store output path in session state
 
                     except Exception as e:
@@ -820,34 +1003,69 @@ def app():
     ]):
         st.subheader("Download All Generated Documents as ZIP")
 
+        # Robust sanitize function for filenames
+        def sanitize_filename(name):
+            if not name:
+                return "Document"
+            # Convert to string and strip whitespace
+            name = str(name).strip()
+            # Replace invalid characters with underscore
+            invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|', '\n', '\r', '\t', '&', '%', '$', '#', '@', '!', '^', '~', '`', "'", ';', ',', '(', ')', '[', ']', '{', '}']
+            for char in invalid_chars:
+                name = name.replace(char, '_')
+            # Replace multiple spaces/underscores with single underscore
+            import re
+            name = re.sub(r'[\s_]+', '_', name)
+            # Remove leading/trailing underscores
+            name = name.strip('_')
+            # Remove any non-ASCII characters
+            name = ''.join(c if ord(c) < 128 else '_' for c in name)
+            # Limit length to avoid path issues (50 chars for safety)
+            name = name[:50] if len(name) > 50 else name
+            return name if name else "Document"
+
+        # Get context values safely
+        ctx = st.session_state.get('context', {}) or {}
+        course_title = sanitize_filename(ctx.get('Course_Title', 'Course'))
+        tgs_ref_no = sanitize_filename(ctx.get('TGS_Ref_No', ''))
+
         # Create an in-memory ZIP file
         zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
-            
-            # Helper function to add a file to the zip archive
-            def add_file(file_path, prefix):
-                if file_path and os.path.exists(file_path):
-                    # Determine file name based on TGS_Ref_No (if available) or fallback to course title
-                    if 'TGS_Ref_No' in st.session_state['context'] and st.session_state['context']['TGS_Ref_No']:
-                        file_name = f"{prefix}_{st.session_state['context']['TGS_Ref_No']}_{st.session_state['context']['Course_Title']}_v1.docx"
-                    else:
-                        file_name = f"{prefix}_{st.session_state['context']['Course_Title']}_v1.docx"
-                    zipf.write(file_path, arcname=file_name)
-            
-            # Add each generated document if it exists
-            add_file(st.session_state.get('lg_output'), "LG")
-            add_file(st.session_state.get('ap_output'), "Assessment_Plan")
-            add_file(st.session_state.get('asr_output'), "Assessment_Summary_Record")
-            add_file(st.session_state.get('lp_output'), "LP")
-            add_file(st.session_state.get('fg_output'), "FG")
-        
-        # Reset the buffer's position to the beginning
-        zip_buffer.seek(0)
-        
-        # Create a download button for the ZIP archive
-        st.download_button(
-            label="Download All Documents (ZIP)",
-            data=zip_buffer.getvalue(),
-            file_name="courseware_documents.zip",
-            mime="application/zip"
-        )
+        try:
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+
+                # Helper function to add a file to the zip archive
+                def add_file(file_path, prefix):
+                    if file_path and os.path.exists(file_path):
+                        # Determine file name based on TGS_Ref_No (if available) or fallback to course title
+                        if tgs_ref_no:
+                            file_name = f"{prefix}_{tgs_ref_no}_{course_title}_v1.docx"
+                        else:
+                            file_name = f"{prefix}_{course_title}_v1.docx"
+
+                        # Read file content and write to zip
+                        with open(file_path, 'rb') as f:
+                            zipf.writestr(file_name, f.read())
+
+                # Add each generated document if it exists
+                add_file(st.session_state.get('lg_output'), "LG")
+                add_file(st.session_state.get('ap_output'), "Assessment_Plan")
+                add_file(st.session_state.get('asr_output'), "Assessment_Summary_Record")
+                add_file(st.session_state.get('lp_output'), "LP")
+                add_file(st.session_state.get('fg_output'), "FG")
+
+            # Reset the buffer's position to the beginning
+            zip_buffer.seek(0)
+
+            # Create a safe ZIP filename
+            zip_filename = f"courseware_{course_title}.zip" if course_title else "courseware_documents.zip"
+
+            # Create a download button for the ZIP archive
+            st.download_button(
+                label="Download All Documents (ZIP)",
+                data=zip_buffer.getvalue(),
+                file_name=zip_filename,
+                mime="application/zip"
+            )
+        except Exception as e:
+            st.error(f"Error creating ZIP file: {e}")
