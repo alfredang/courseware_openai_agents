@@ -113,8 +113,8 @@ def init_database():
 
         conn.commit()
 
-    # Run migrations for new columns
-    _run_migrations(conn)
+        # Run migrations for new columns (inside the connection context)
+        _run_migrations(conn)
 
     # Seed built-in API key configurations
     _seed_builtin_api_keys()
