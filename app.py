@@ -318,7 +318,7 @@ with st.sidebar:
 
     # Model Selection (no divider for compact layout)
     from settings.api_manager import get_all_available_models, get_all_api_key_configs, load_api_keys
-    from settings.api_database import get_all_models as db_get_all_models
+    from settings.api_database import get_all_models as db_get_all_models, get_default_model, set_default_model
 
     # Get all API key configurations and current keys
     api_key_configs = get_all_api_key_configs()
@@ -375,13 +375,11 @@ with st.sidebar:
     else:
         model_names = [m["name"] for m in filtered_models]
 
-        # Find default model index (DeepSeek-V3 for OpenRouter, or first available)
+        # Find default model index from database, or use first available
         default_model_idx = 0
-        if selected_provider == "OPENROUTER":
-            for i, name in enumerate(model_names):
-                if "deepseek" in name.lower() and "v3" in name.lower():
-                    default_model_idx = i
-                    break
+        stored_default = get_default_model(selected_provider)
+        if stored_default and stored_default in model_names:
+            default_model_idx = model_names.index(stored_default)
 
         # Reset model selection when provider changes
         if 'last_api_provider' not in st.session_state:
@@ -398,12 +396,24 @@ with st.sidebar:
         if st.session_state['selected_model_idx'] >= len(model_names):
             st.session_state['selected_model_idx'] = default_model_idx
 
-        selected_model_idx = st.selectbox(
-            "Select Model:",
-            range(len(model_names)),
-            format_func=lambda x: model_names[x],
-            index=st.session_state['selected_model_idx']
-        )
+        # Model selector with Set Default button
+        col_model, col_star = st.columns([5, 1])
+        with col_model:
+            selected_model_idx = st.selectbox(
+                "Select Model:",
+                range(len(model_names)),
+                format_func=lambda x: model_names[x],
+                index=st.session_state['selected_model_idx']
+            )
+        with col_star:
+            st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)  # Spacing
+            current_model = model_names[selected_model_idx]
+            is_default = stored_default == current_model
+            star_icon = "⭐" if is_default else "☆"
+            if st.button(star_icon, key="set_default_btn", help="Set as default model for this provider"):
+                if not is_default:
+                    set_default_model(selected_provider, current_model)
+                    st.rerun()
 
         # Store selection in session state
         st.session_state['selected_model_idx'] = selected_model_idx

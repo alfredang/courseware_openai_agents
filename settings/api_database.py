@@ -100,6 +100,17 @@ def init_database():
             )
         """)
 
+        # Default models per provider table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS default_models (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                api_provider TEXT UNIQUE NOT NULL,
+                model_name TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         conn.commit()
 
     # Seed built-in API key configurations
@@ -747,3 +758,44 @@ def api_key_config_exists(key_name: str) -> bool:
         cursor = conn.cursor()
         cursor.execute("SELECT 1 FROM api_keys WHERE key_name = ?", (key_name,))
         return cursor.fetchone() is not None
+
+
+# ============ Default Model Operations ============
+
+def get_default_model(api_provider: str) -> Optional[str]:
+    """Get the default model name for an API provider"""
+    init_database()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT model_name FROM default_models WHERE api_provider = ?", (api_provider,))
+        row = cursor.fetchone()
+        return row["model_name"] if row else None
+
+
+def set_default_model(api_provider: str, model_name: str) -> bool:
+    """Set the default model for an API provider"""
+    init_database()
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO default_models (api_provider, model_name)
+                VALUES (?, ?)
+                ON CONFLICT(api_provider) DO UPDATE SET
+                    model_name = excluded.model_name,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (api_provider, model_name))
+            return True
+    except Exception as e:
+        print(f"Error setting default model: {e}")
+        return False
+
+
+def get_all_default_models() -> Dict[str, str]:
+    """Get all default models as a dictionary {api_provider: model_name}"""
+    init_database()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT api_provider, model_name FROM default_models")
+        rows = cursor.fetchall()
+        return {row["api_provider"]: row["model_name"] for row in rows}
