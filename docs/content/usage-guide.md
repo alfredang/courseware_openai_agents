@@ -25,3 +25,33 @@ If you prefer the modular interface:
 1. Go to **Settings** → **Companies**.
 2. Add or select your organization.
 3. Upload a logo and set company details. These will be automatically injected into generated documents.
+
+## 5. Generating Presentation Slides
+1. Select **"Generate Slides"** from the sidebar.
+2. Upload your course material (Facilitator Guide, Learner Guide, or Course Proposal).
+3. Configure options:
+   - Slides per topic
+   - Include speaker notes
+   - Include section summaries
+4. Click **Generate Presentation Slides**.
+5. Download in your preferred format (PowerPoint, PDF, or Google Slides).
+
+**Note**: This feature requires NotebookLM MCP server. See [notebooklm-mcp](https://github.com/alfredang/notebooklm-mcp) for setup.
+
+## 6. Using the AI Assistant
+The AI Assistant at the bottom of every page helps with WSQ courseware tasks:
+
+### Quick Navigation
+Type skill commands to navigate directly to modules:
+- `/generate_course_proposal` - Go to CP generation
+- `/generate_ap_fg_lg_lp` - Go to Courseware Suite
+- `/generate_assessment` - Go to Assessment generation
+- `/generate_slides` - Go to Slides generation
+
+### Getting Help
+Ask questions like:
+- *"What documents do I need for assessment generation?"*
+- *"How do I create a learning guide?"*
+- *"What are the WSQ requirements for assessments?"*
+
+The assistant uses skill definitions to provide accurate, contextual guidance.
