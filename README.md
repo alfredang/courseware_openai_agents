@@ -52,12 +52,17 @@ uv pip install -r requirements.txt
 **Manual Configuration (Fallback)**
 Create `.streamlit/secrets.toml`:
 ```toml
-# API Keys - Use Settings UI instead
+# API Keys - Use Settings UI instead (recommended)
 OPENAI_API_KEY = "sk-your_key_here"
 OPENROUTER_API_KEY = "sk-or-your_key_here"
+GEMINI_API_KEY = "your-gemini-api-key"
 
 # Database (Neon PostgreSQL for company data)
 DATABASE_URL = "postgresql://user:password@host/database?sslmode=require"
+
+# Admin Authentication (for Settings access)
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "your-secure-password"
 ```
 
 ### 4. Run the Application
@@ -68,16 +73,25 @@ streamlit run app.py
 ### 5. First Use
 1. Open browser to `http://localhost:8501`
 2. **Set up API Keys**: Go to **Settings** → **API Keys**
-3. **Available Models**: DeepSeek-Chat, GPT-4o-Mini, Claude-3.5-Sonnet, Gemini-Flash, Gemini-Pro
-4. Select **"Generate CP"** from sidebar
-5. Choose **"DeepSeek-Chat"** (Default & Recommended)
+3. **Select API Provider**: Choose from OpenRouter, OpenAI, or Gemini in the sidebar
+4. **Select Model**: Pick from available models for the selected provider
+5. Select **"Generate CP"** from sidebar
 6. Upload a TSC document to test
 
-### 💡 Model Recommendations
-- **DeepSeek-Chat**: Best overall (performance/cost ratio)
-- **GPT-4o-Mini**: Good for simple tasks
-- **Claude-3.5-Sonnet**: Excellent for complex reasoning
-- **Gemini-Flash**: Fast and cost-effective
+### 💡 Model Selection & Management
+The application features a flexible model management system:
+
+- **API Provider Selection**: Choose from OpenRouter (38+ models), OpenAI (native), or Gemini
+- **Dynamic Model Loading**: Models are loaded from the database based on the selected provider
+- **Default Models**: Admin can set default models per provider (⭐ button in Settings)
+- **Model Fetching**: Admin can fetch latest models from providers via Settings
+- **Enable/Disable Models**: Admin can show/hide models from the selection dropdown
+
+**Recommended Models:**
+- **DeepSeek-Chat** (OpenRouter): Best overall performance/cost ratio
+- **GPT-4o-Mini** (OpenRouter/OpenAI): Fast and cost-effective
+- **Claude-3.5-Sonnet** (OpenRouter): Excellent for complex reasoning
+- **Gemini-Flash** (Gemini): Very fast processing
 
 ## 🚀 Key Features
 
@@ -89,11 +103,19 @@ streamlit run app.py
 - **Document Integration** - Assessment integration into AP annexes
 - **Document Verification** - Supporting document validation and entity extraction
 
+### Model Management System
+- **Multi-Provider Support** - OpenRouter (38+ models), OpenAI (native), and Gemini
+- **Dynamic Model Selection** - Choose models from sidebar, applied to all generation modules
+- **Default Model Configuration** - Admin can set default model per API provider
+- **Model Fetching** - Fetch latest models from provider APIs
+- **Enable/Disable Models** - Control which models appear in the selection dropdown
+- **SQLite Database** - Persistent storage for model configurations and preferences
+
 ### Advanced AI Architecture
 - **Orchestrator Agent** - Central coordinator that interacts with users and delegates to specialized agents
 - **Multi-Agent Handoffs** - Seamless workflow transitions between specialized agents
 - **Model Flexibility** - Support for 38+ models (DeepSeek, OpenAI, Anthropic, Google) via OpenRouter
-- **Dynamic Model Selection** - Configure models per agent from the Settings UI
+- **Dynamic Model Selection** - Select model in sidebar, automatically applied to courseware generation
 - **Content Intelligence** - Context-aware content generation with memory
 - **Quality Assurance** - Multi-layer validation and error correction
 
@@ -305,8 +327,9 @@ courseware_openai_agents/
 │   ├── brochure_agent.py      # Marketing brochure agent
 │   └── document_agent.py      # Document verification agent
 ├── settings/                   # API and model configuration
-│   ├── settings.py            # API Keys & LLM Models UI
+│   ├── settings.py            # API Keys & LLM Models UI (Admin)
 │   ├── api_manager.py         # API key management (SQLite storage)
+│   ├── api_database.py        # Model database operations (SQLite)
 │   └── model_configs.py       # AI model configurations (38+ models)
 ├── company/                    # Company/organization management
 │   ├── company_settings.py    # Company management UI
@@ -375,9 +398,32 @@ The orchestrator will automatically route your request to the appropriate specia
 
 ## 🔧 Configuration
 
-### OpenRouter Integration
-All models are accessed through **OpenRouter**, providing unified access to 38+ models:
+### API Provider & Model Management
 
+The application supports multiple AI providers with dynamic model selection:
+
+#### Supported API Providers
+| Provider | Description | Key Configuration |
+|----------|-------------|-------------------|
+| **OpenRouter** | Unified gateway to 38+ models from various providers | `OPENROUTER_API_KEY` |
+| **OpenAI** | Native OpenAI models (GPT-4o, GPT-4-Turbo, etc.) | `OPENAI_API_KEY` |
+| **Gemini** | Google's Gemini models | `GEMINI_API_KEY` |
+
+#### Model Selection Workflow
+1. **Select API Provider** in the sidebar (defaults to OpenRouter)
+2. **Choose Model** from the dropdown (shows enabled models for that provider)
+3. **Generate Documents** - selected model is applied to all generation modules
+
+#### Admin Model Management (Settings → LLM Models)
+| Feature | Description |
+|---------|-------------|
+| **Set Default (⭐)** | Mark a model as default for the selected API provider |
+| **Enable/Disable** | Show/hide models in the selection dropdown |
+| **Fetch Models** | Retrieve latest available models from the provider's API |
+| **Add Models** | Manually add new model configurations |
+| **Delete Models** | Remove unused model configurations |
+
+#### Available Models via OpenRouter
 | Provider | Models |
 |----------|--------|
 | **OpenAI** | GPT-4o, GPT-4o-Mini, GPT-4-Turbo, o1, o1-mini, o3-mini |
@@ -388,7 +434,7 @@ All models are accessed through **OpenRouter**, providing unified access to 38+ 
 | **Qwen** | Qwen 2.5 72B, QwQ 32B |
 | **Mistral** | Mistral Large, Codestral |
 
-### Model Selection
+### Recommended Models
 - **DeepSeek-Chat**: Best performance/cost ratio (recommended default)
 - **GPT-4o-Mini**: Fast and cost-effective for simple tasks
 - **Claude Sonnet 4**: Excellent for complex reasoning
@@ -438,9 +484,19 @@ Topic 1: Data Collection Methods (K1, A1)
 
 **API Key Issues:**
 - Use **Settings → API Keys** tab to manage API keys (recommended)
-- For fallback: verify API keys are set in `secrets.toml`
-- Check API key validity and quotas
-- Ensure correct provider is selected for each model
+- Ensure you have the API key for your selected provider:
+  - OpenRouter: `OPENROUTER_API_KEY`
+  - OpenAI: `OPENAI_API_KEY`
+  - Gemini: `GEMINI_API_KEY`
+- For fallback: verify API keys are set in `.streamlit/secrets.toml`
+- Check API key validity and quotas with your provider
+- The system will automatically use the API key matching the selected provider
+
+**Model Selection Issues:**
+- If no models appear, ensure the API provider has models in the database
+- Use **Settings → LLM Models → Fetch Models** to retrieve available models
+- Check that models are enabled (not disabled in Settings)
+- Verify a default model is set for the provider (⭐ button)
 
 **Document Processing Errors:**
 - Ensure uploaded documents follow TSC formatting requirements
