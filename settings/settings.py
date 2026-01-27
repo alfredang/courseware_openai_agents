@@ -157,82 +157,93 @@ def update_secrets_toml(key_name: str, key_value: str) -> bool:
 
 def manage_api_keys():
     """Manage API Keys section"""
+    st.markdown("### Existing API Keys")
+
     # Load current API keys and configurations
     current_keys = load_api_keys()
     api_key_configs = get_all_api_key_configs()
 
-    # Initialize editing state
-    if 'editing_api_key' not in st.session_state:
-        st.session_state['editing_api_key'] = None
+    # Initialize visibility state for password fields
+    if 'api_key_visibility' not in st.session_state:
+        st.session_state['api_key_visibility'] = {}
 
-    # Display each API key
+    # Initialize edited values state
+    if 'api_key_edits' not in st.session_state:
+        st.session_state['api_key_edits'] = {}
+
+    # Track if any changes were made
+    has_changes = False
+
+    # Display each API key with password input
     for config in api_key_configs:
         key_name = config["key_name"]
         display_name = config["display_name"]
-        description = config.get("description", "")
         key_value = current_keys.get(key_name, "")
+        is_builtin = config.get("is_builtin", True)
 
-        # Check if this key is being edited
-        is_editing = st.session_state['editing_api_key'] == key_name
+        # Initialize visibility state for this key
+        if key_name not in st.session_state['api_key_visibility']:
+            st.session_state['api_key_visibility'][key_name] = False
 
-        if is_editing:
-            # Edit mode - show input field
-            col1, col2, col3 = st.columns([2, 3, 1])
+        # Get current visibility
+        show_password = st.session_state['api_key_visibility'][key_name]
 
-            with col1:
-                st.markdown(f"**{key_name}**")
+        col1, col2, col3, col4 = st.columns([2, 3, 0.5, 0.5])
 
-            with col2:
-                new_key = st.text_input(
-                    "Enter API Key",
-                    value="",
-                    type="password",
-                    key=f"input_{key_name}",
-                    placeholder="Paste your API key here...",
-                    label_visibility="collapsed"
-                )
+        with col1:
+            st.markdown(f"**{key_name}**")
 
-            with col3:
-                col3a, col3b = st.columns(2)
-                with col3a:
-                    if st.button("💾", key=f"save_{key_name}", help="Save"):
-                        if new_key:
-                            if update_secrets_toml(key_name, new_key):
-                                st.session_state['editing_api_key'] = None
-                                # Clear API keys cache to reload
-                                if 'api_keys' in st.session_state:
-                                    del st.session_state['api_keys']
-                                st.success(f"Saved!")
-                                st.rerun()
-                        else:
-                            st.warning("Enter a key")
-                with col3b:
-                    if st.button("✕", key=f"cancel_{key_name}", help="Cancel"):
-                        st.session_state['editing_api_key'] = None
+        with col2:
+            # Password input field
+            input_type = "default" if show_password else "password"
+            new_value = st.text_input(
+                f"API Key for {key_name}",
+                value=key_value,
+                type=input_type,
+                key=f"input_{key_name}",
+                placeholder="Enter API key...",
+                label_visibility="collapsed"
+            )
+
+            # Track changes
+            if new_value != key_value:
+                st.session_state['api_key_edits'][key_name] = new_value
+                has_changes = True
+
+        with col3:
+            # Eye icon to toggle visibility
+            eye_icon = "👁️" if show_password else "👁️‍🗨️"
+            if st.button(eye_icon, key=f"toggle_{key_name}", help="Show/Hide"):
+                st.session_state['api_key_visibility'][key_name] = not show_password
+                st.rerun()
+
+        with col4:
+            # Trash icon to delete (only for custom API keys)
+            if not is_builtin:
+                if st.button("🗑️", key=f"delete_{key_name}", help="Delete"):
+                    if remove_api_key_config(key_name):
+                        st.success(f"Deleted {key_name}")
                         st.rerun()
+
+    st.markdown("---")
+
+    # Save All Changes button
+    if st.button("💾 Save All Changes", type="primary", use_container_width=True):
+        saved_count = 0
+        for key_name, new_value in st.session_state.get('api_key_edits', {}).items():
+            if new_value:
+                if update_secrets_toml(key_name, new_value):
+                    saved_count += 1
+
+        if saved_count > 0:
+            st.success(f"Saved {saved_count} API key(s)!")
+            # Clear caches
+            st.session_state['api_key_edits'] = {}
+            if 'api_keys' in st.session_state:
+                del st.session_state['api_keys']
+            st.rerun()
         else:
-            # View mode
-            col1, col2, col3 = st.columns([2, 3, 1])
-
-            with col1:
-                st.markdown(f"**{key_name}**")
-
-            with col2:
-                if key_value:
-                    # Show masked key with asterisks and last 4 digits
-                    masked = "*" * 8 + key_value[-4:] if len(key_value) > 4 else "****"
-                    st.success(masked)
-                else:
-                    # Empty dark box for unconfigured keys
-                    st.markdown(
-                        "<div style='background-color: #1e1e1e; padding: 0.75rem 1rem; border-radius: 0.5rem; color: #666;'>&nbsp;</div>",
-                        unsafe_allow_html=True
-                    )
-
-            with col3:
-                if st.button("✏️", key=f"edit_{key_name}", help="Update API Key"):
-                    st.session_state['editing_api_key'] = key_name
-                    st.rerun()
+            st.info("No changes to save")
 
 
 
