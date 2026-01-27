@@ -497,6 +497,14 @@ with st.sidebar:
         if st.button("Companies", use_container_width=True):
             st.session_state['settings_page'] = "Company Management"
 
+    # Powered by footer
+    st.markdown("---")
+    st.markdown("""
+        <div style='text-align: center; color: #888; font-size: 0.8rem;'>
+            Powered by <b>Tertiary Infotech Academy Pte Ltd</b>
+        </div>
+    """, unsafe_allow_html=True)
+
 # Check if a settings page is selected (takes priority)
 settings_page = st.session_state.get('settings_page', None)
 
