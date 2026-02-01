@@ -1,0 +1,32 @@
+[project]
+name = "courseware-openai"
+version = "0.1.0"
+description = "WSQ Courseware Assistant with OpenAI Multi Agents"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "beautifulsoup4",
+    "docxtpl",
+    "google-api-python-client",
+    "google-auth-httplib2",
+    "google-auth-oauthlib",
+    "pydantic>=2.0.0",
+    "streamlit>=1.30.0",
+    "openpyxl",
+    "pandas",
+    "Pillow",
+    "python-docx",
+    "docxcompose",
+    "streamlit-option-menu",
+    "requests",
+    "lxml",
+    "pypdf2",
+    "gspread",
+    "rapidfuzz",
+    "oauth2client",
+    "streamlit-modal",
+    "python-dotenv",
+    "psycopg2-binary",
+    "jinja2",
+    "openai>=1.12.0",
+]
